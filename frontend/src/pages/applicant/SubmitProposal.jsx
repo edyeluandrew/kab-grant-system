@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
@@ -6,13 +6,23 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
+import Loader from '../../components/common/Loader';
 import { createProposalDraft } from '../../api/applicantApi';
+import { getFaculties, getDepartments, getResearchDisciplines, getGrantCalls } from '../../api/referenceApi';
+import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 
 export default function SubmitProposal() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Dropdown loading states
+  const [loadingDropdowns, setLoadingDropdowns] = useState(true);
+  const [faculties, setFaculties] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [disciplines, setDisciplines] = useState([]);
+  const [grantCalls, setGrantCalls] = useState([]);
 
   const [formData, setFormData] = useState({
     // Basic Project Information
@@ -28,6 +38,7 @@ export default function SubmitProposal() {
     piEmail: '',
     piPhone: '',
     researchType: '',
+    grantCall: '',
 
     // Project Description
     summary: '',
@@ -54,6 +65,46 @@ export default function SubmitProposal() {
     compliance: false,
   });
 
+  // Load reference data on mount
+  useEffect(() => {
+    const loadDropdownData = async () => {
+      try {
+        setLoadingDropdowns(true);
+        const [facultiesData, disciplinesData, grantCallsData] = await Promise.all([
+          getFaculties(),
+          getResearchDisciplines(),
+          getGrantCalls(),
+        ]);
+        setFaculties(facultiesData);
+        setDisciplines(disciplinesData);
+        setGrantCalls(grantCallsData);
+      } catch (err) {
+        console.error('Error loading dropdown data:', err);
+      } finally {
+        setLoadingDropdowns(false);
+      }
+    };
+
+    loadDropdownData();
+  }, []);
+
+  // Load departments when faculty changes
+  useEffect(() => {
+    if (formData.faculty) {
+      const loadDepts = async () => {
+        try {
+          const depts = await getDepartments(formData.faculty);
+          setDepartments(depts);
+        } catch (err) {
+          console.error('Error loading departments:', err);
+        }
+      };
+      loadDepts();
+    } else {
+      setDepartments([]);
+    }
+  }, [formData.faculty]);
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -76,7 +127,7 @@ export default function SubmitProposal() {
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        navigate('/applicant/proposals');
+        navigate('/applicant/dashboard');
       }, 2000);
     } catch (err) {
       setError(err.message);
@@ -122,11 +173,14 @@ export default function SubmitProposal() {
       {error && <Alert variant="danger" title="Error">{error}</Alert>}
       {success && (
         <Alert variant="success" title="Success">
-          Proposal saved successfully. You will be redirected to upload attachments.
+          Draft saved successfully. You can now upload attachments and add project team members from the dashboard.
         </Alert>
       )}
 
-      <form onSubmit={handleSaveDraft} className="space-y-6">
+      {loadingDropdowns ? (
+        <Loader />
+      ) : (
+        <form onSubmit={handleSaveDraft} className="space-y-6">
         {/* Section A: Basic Project Information */}
         <Card title="A. Basic Project Information">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4">
@@ -151,42 +205,115 @@ export default function SubmitProposal() {
               value={formData.piLastName}
               onChange={handleInputChange}
             />
-            <Input
-              label="Highest Qualifications"
-              name="piQualifications"
-              value={formData.piQualifications}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Sex of PI"
-              name="piSex"
-              value={formData.piSex}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Designation of PI"
-              name="piDesignation"
-              value={formData.piDesignation}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Faculty"
-              name="faculty"
-              value={formData.faculty}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Department"
-              name="department"
-              value={formData.department}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Research Specialization"
-              name="specialization"
-              value={formData.specialization}
-              onChange={handleInputChange}
-            />
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Highest Qualifications
+              </label>
+              <select
+                name="piQualifications"
+                value={formData.piQualifications}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select qualification</option>
+                {qualificationOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Sex of PI
+              </label>
+              <select
+                name="piSex"
+                value={formData.piSex}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select sex</option>
+                {sexOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Designation of PI
+              </label>
+              <select
+                name="piDesignation"
+                value={formData.piDesignation}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select designation</option>
+                {designationOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Faculty
+              </label>
+              <select
+                name="faculty"
+                value={formData.faculty}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select faculty</option>
+                {faculties.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Department
+              </label>
+              <select
+                name="department"
+                value={formData.department}
+                onChange={handleInputChange}
+                disabled={!formData.faculty}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              >
+                <option value="">Select department</option>
+                {departments.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Research Specialization
+              </label>
+              <select
+                name="specialization"
+                value={formData.specialization}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select specialization</option>
+                {disciplines.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Input
               label="PI Email / Primary Contact Email"
               name="piEmail"
@@ -200,12 +327,42 @@ export default function SubmitProposal() {
               value={formData.piPhone}
               onChange={handleInputChange}
             />
-            <Input
-              label="Type of Research"
-              name="researchType"
-              value={formData.researchType}
-              onChange={handleInputChange}
-            />
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Type of Research
+              </label>
+              <select
+                name="researchType"
+                value={formData.researchType}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select research type</option>
+                {typeOfResearchOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Grant Call
+              </label>
+              <select
+                name="grantCall"
+                value={formData.grantCall}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select grant call</option>
+                {grantCalls.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </Card>
 
@@ -375,6 +532,7 @@ export default function SubmitProposal() {
           </div>
         </Card>
       </form>
+      )}
     </DashboardLayout>
   );
 }

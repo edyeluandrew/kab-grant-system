@@ -8,6 +8,8 @@ import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
 import { getProjectTeamMembers, addProjectTeamMember } from '../../api/applicantApi';
+import { getFaculties, getDepartments, getResearchDisciplines } from '../../api/referenceApi';
+import { sexOptions, qualificationOptions, designationOptions } from '../../utils/formOptions';
 
 export default function ProjectTeamMembers() {
   const { id: proposalId } = useParams();
@@ -16,6 +18,12 @@ export default function ProjectTeamMembers() {
   const [error, setError] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [success, setSuccess] = useState(null);
+  
+  // Dropdown loading states
+  const [loadingDropdowns, setLoadingDropdowns] = useState(true);
+  const [faculties, setFaculties] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [disciplines, setDisciplines] = useState([]);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -46,6 +54,44 @@ export default function ProjectTeamMembers() {
 
     fetchTeamMembers();
   }, [proposalId]);
+
+  // Load reference data on mount
+  useEffect(() => {
+    const loadDropdownData = async () => {
+      try {
+        setLoadingDropdowns(true);
+        const [facultiesData, disciplinesData] = await Promise.all([
+          getFaculties(),
+          getResearchDisciplines(),
+        ]);
+        setFaculties(facultiesData);
+        setDisciplines(disciplinesData);
+      } catch (err) {
+        console.error('Error loading dropdown data:', err);
+      } finally {
+        setLoadingDropdowns(false);
+      }
+    };
+
+    loadDropdownData();
+  }, []);
+
+  // Load departments when faculty changes
+  useEffect(() => {
+    if (formData.faculty) {
+      const loadDepts = async () => {
+        try {
+          const depts = await getDepartments(formData.faculty);
+          setDepartments(depts);
+        } catch (err) {
+          console.error('Error loading departments:', err);
+        }
+      };
+      loadDepts();
+    } else {
+      setDepartments([]);
+    }
+  }, [formData.faculty]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -116,42 +162,115 @@ export default function ProjectTeamMembers() {
               onChange={handleInputChange}
               required
             />
-            <Input
-              label="Highest Qualifications"
-              name="qualifications"
-              value={formData.qualifications}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Gender"
-              name="gender"
-              value={formData.gender}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Designation"
-              name="designation"
-              value={formData.designation}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Faculty"
-              name="faculty"
-              value={formData.faculty}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Department"
-              name="department"
-              value={formData.department}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Research Specialization"
-              name="specialization"
-              value={formData.specialization}
-              onChange={handleInputChange}
-            />
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Highest Qualifications
+              </label>
+              <select
+                name="qualifications"
+                value={formData.qualifications}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select qualification</option>
+                {qualificationOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Gender
+              </label>
+              <select
+                name="gender"
+                value={formData.gender}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select gender</option>
+                {sexOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Designation
+              </label>
+              <select
+                name="designation"
+                value={formData.designation}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select designation</option>
+                {designationOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Faculty
+              </label>
+              <select
+                name="faculty"
+                value={formData.faculty}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select faculty</option>
+                {faculties.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Department
+              </label>
+              <select
+                name="department"
+                value={formData.department}
+                onChange={handleInputChange}
+                disabled={!formData.faculty}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              >
+                <option value="">Select department</option>
+                {departments.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-textMain mb-2">
+                Research Specialization
+              </label>
+              <select
+                name="specialization"
+                value={formData.specialization}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select specialization</option>
+                {disciplines.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Input
               label="KAB Email Address"
               name="email"

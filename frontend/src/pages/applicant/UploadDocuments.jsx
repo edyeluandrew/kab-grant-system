@@ -8,6 +8,7 @@ import Badge from '../../components/common/Badge';
 import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
 import { getProposalAttachments, uploadProposalAttachment } from '../../api/applicantApi';
+import { attachmentTypeOptions } from '../../utils/formOptions';
 
 export default function UploadDocuments() {
   const { id: proposalId } = useParams();
