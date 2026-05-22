@@ -7,13 +7,15 @@ import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
-import { getMyProposals } from '../../api/applicantApi';
+import { getMyProposals, deleteDraft, submitProposal } from '../../api/applicantApi';
 
 export default function MyProposals() {
   const navigate = useNavigate();
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [actionSuccess, setActionSuccess] = useState(null);
 
   useEffect(() => {
     const fetchProposals = async () => {
@@ -31,6 +33,40 @@ export default function MyProposals() {
 
     fetchProposals();
   }, []);
+
+  const handleDelete = async (proposalId) => {
+    if (!window.confirm('Are you sure you want to delete this draft? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setActionLoading(proposalId);
+      await deleteDraft(proposalId);
+      setProposals((prev) => prev.filter((p) => p.id !== proposalId));
+      setActionSuccess('Draft deleted successfully');
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to delete draft');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSubmit = async (proposalId) => {
+    try {
+      setActionLoading(proposalId);
+      await submitProposal(proposalId);
+      // Refresh the proposals list
+      const updatedProposals = await getMyProposals();
+      setProposals(updatedProposals);
+      setActionSuccess('Proposal submitted successfully');
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to submit proposal');
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
   const getStatusBadge = (status) => {
     const variants = {
@@ -64,6 +100,7 @@ export default function MyProposals() {
       />
 
       {error && <Alert variant="danger">{error}</Alert>}
+      {actionSuccess && <Alert variant="success">{actionSuccess}</Alert>}
 
       <Card>
         {proposals.length === 0 ? (
@@ -98,11 +135,12 @@ export default function MyProposals() {
                     <td className="py-3 px-4 text-textMain">{proposal.membersCount}</td>
                     <td className="py-3 px-4 text-muted">-</td>
                     <td className="py-3 px-4">
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-1 flex-wrap">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => navigate(`/applicant/proposals/${proposal.id}`)}
+                          disabled={actionLoading === proposal.id}
                         >
                           Details
                         </Button>
@@ -112,6 +150,7 @@ export default function MyProposals() {
                               size="sm"
                               variant="secondary"
                               onClick={() => navigate(`/applicant/proposals/${proposal.id}`)}
+                              disabled={actionLoading === proposal.id}
                             >
                               Edit
                             </Button>
@@ -119,8 +158,33 @@ export default function MyProposals() {
                               size="sm"
                               variant="accent"
                               onClick={() => navigate(`/applicant/proposals/${proposal.id}/documents`)}
+                              disabled={actionLoading === proposal.id}
                             >
                               Upload
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => navigate(`/applicant/proposals/${proposal.id}/team-members`)}
+                              disabled={actionLoading === proposal.id}
+                            >
+                              Members
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="warning"
+                              onClick={() => handleSubmit(proposal.id)}
+                              disabled={actionLoading === proposal.id}
+                            >
+                              {actionLoading === proposal.id ? 'Submitting...' : 'Submit'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => handleDelete(proposal.id)}
+                              disabled={actionLoading === proposal.id}
+                            >
+                              {actionLoading === proposal.id ? 'Deleting...' : 'Delete'}
                             </Button>
                           </>
                         )}

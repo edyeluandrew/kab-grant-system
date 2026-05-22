@@ -7,16 +7,50 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
-import { createProposalDraft } from '../../api/applicantApi';
+import { createProposalDraft, submitProposal } from '../../api/applicantApi';
 import { getFaculties, getDepartments, getResearchDisciplines, getGrantCalls } from '../../api/referenceApi';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
+import {
+  validateRequired,
+  validateEmail,
+  validateKABEmail,
+  validatePhone,
+  validateBudget,
+  validateWordCount,
+  validateCompliance,
+  validateOtherSpecification,
+  countWords,
+  isOtherOption,
+  getSpecificationFieldName,
+} from '../../utils/validations';
+
+// Word count limits for each field
+const WORD_LIMITS = {
+  summary: 200,
+  problemStatement: 200,
+  proposedSolution: 200,
+  relevance: 300,
+  innovativeness: 200,
+  methods: 750,
+  outcomes: 250,
+  dissemination: 250,
+  policyImpact: 250,
+  scalability: 200,
+  sustainability: 150,
+  genderConsiderations: 150,
+  ethicalImpact: 200,
+  capacityBuilding: 250,
+  conflictOfInterest: 150,
+  references: 250,
+};
 
 export default function SubmitProposal() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
-  
+  const [errors, setErrors] = useState({});
+
   // Dropdown loading states
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
   const [faculties, setFaculties] = useState([]);
@@ -30,14 +64,17 @@ export default function SubmitProposal() {
     piFirstName: '',
     piLastName: '',
     piQualifications: '',
+    piQualificationsOther: '',
     piSex: '',
     piDesignation: '',
+    piDesignationOther: '',
     faculty: '',
     department: '',
     specialization: '',
     piEmail: '',
     piPhone: '',
     researchType: '',
+    researchTypeOther: '',
     grantCall: '',
 
     // Project Description
@@ -111,26 +148,169 @@ export default function SubmitProposal() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
+    // Clear error for this field when user starts typing
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: '',
+      }));
+    }
+  };
+
+  const validateForm = (isSubmitting = false) => {
+    const newErrors = {};
+
+    // Required fields
+    if (!formData.projectTitle) newErrors.projectTitle = 'Project title is required';
+    if (!formData.piFirstName) newErrors.piFirstName = 'PI first name is required';
+    if (!formData.piLastName) newErrors.piLastName = 'PI last name is required';
+    if (!formData.piQualifications) newErrors.piQualifications = 'Highest qualifications are required';
+    if (isOtherOption(formData.piQualifications) && !formData.piQualificationsOther) {
+      newErrors.piQualificationsOther = 'Please specify your qualifications';
+    }
+    if (!formData.piSex) newErrors.piSex = 'Sex is required';
+    if (!formData.piDesignation) newErrors.piDesignation = 'Designation is required';
+    if (isOtherOption(formData.piDesignation) && !formData.piDesignationOther) {
+      newErrors.piDesignationOther = 'Please specify your designation';
+    }
+    if (!formData.faculty) newErrors.faculty = 'Faculty is required';
+    if (!formData.department) newErrors.department = 'Department is required';
+    if (!formData.specialization) newErrors.specialization = 'Research specialization is required';
+    if (!formData.piEmail) newErrors.piEmail = 'Email is required';
+    const emailError = validateKABEmail(formData.piEmail);
+    if (formData.piEmail && emailError) {
+      newErrors.piEmail = emailError;
+    }
+    if (!formData.piPhone) newErrors.piPhone = 'Phone number is required';
+    const phoneError = validatePhone(formData.piPhone);
+    if (formData.piPhone && phoneError) {
+      newErrors.piPhone = phoneError;
+    }
+    if (!formData.researchType) newErrors.researchType = 'Type of research is required';
+    if (isOtherOption(formData.researchType) && !formData.researchTypeOther) {
+      newErrors.researchTypeOther = 'Please specify the research type';
+    }
+    if (!formData.grantCall) newErrors.grantCall = 'Grant call is required';
+
+    // Project Description - all required
+    if (!formData.summary) newErrors.summary = 'Project summary is required';
+    if (formData.summary && validateWordCount(formData.summary, WORD_LIMITS.summary, 'Project Summary')) {
+      newErrors.summary = validateWordCount(formData.summary, WORD_LIMITS.summary, 'Project Summary');
+    }
+
+    if (!formData.problemStatement) newErrors.problemStatement = 'Problem statement is required';
+    if (formData.problemStatement && validateWordCount(formData.problemStatement, WORD_LIMITS.problemStatement, 'Problem Statement')) {
+      newErrors.problemStatement = validateWordCount(formData.problemStatement, WORD_LIMITS.problemStatement, 'Problem Statement');
+    }
+
+    if (!formData.proposedSolution) newErrors.proposedSolution = 'Proposed solution is required';
+    if (formData.proposedSolution && validateWordCount(formData.proposedSolution, WORD_LIMITS.proposedSolution, 'Proposed Solution')) {
+      newErrors.proposedSolution = validateWordCount(formData.proposedSolution, WORD_LIMITS.proposedSolution, 'Proposed Solution');
+    }
+
+    if (!formData.relevance) newErrors.relevance = 'Relevance is required';
+    if (formData.relevance && validateWordCount(formData.relevance, WORD_LIMITS.relevance, 'Relevance')) {
+      newErrors.relevance = validateWordCount(formData.relevance, WORD_LIMITS.relevance, 'Relevance');
+    }
+
+    if (!formData.innovativeness) newErrors.innovativeness = 'Innovativeness is required';
+    if (formData.innovativeness && validateWordCount(formData.innovativeness, WORD_LIMITS.innovativeness, 'Innovativeness')) {
+      newErrors.innovativeness = validateWordCount(formData.innovativeness, WORD_LIMITS.innovativeness, 'Innovativeness');
+    }
+
+    if (!formData.mainObjective) newErrors.mainObjective = 'Main objective is required';
+    if (!formData.specificObjectives) newErrors.specificObjectives = 'Specific objectives are required';
+
+    if (!formData.methods) newErrors.methods = 'Methods description is required';
+    if (formData.methods && validateWordCount(formData.methods, WORD_LIMITS.methods, 'Methods Description')) {
+      newErrors.methods = validateWordCount(formData.methods, WORD_LIMITS.methods, 'Methods Description');
+    }
+
+    if (!formData.outcomes) newErrors.outcomes = 'Outcomes/Impact is required';
+    if (formData.outcomes && validateWordCount(formData.outcomes, WORD_LIMITS.outcomes, 'Outcomes')) {
+      newErrors.outcomes = validateWordCount(formData.outcomes, WORD_LIMITS.outcomes, 'Outcomes');
+    }
+
+    if (!formData.dissemination) newErrors.dissemination = 'Dissemination plan is required';
+    if (formData.dissemination && validateWordCount(formData.dissemination, WORD_LIMITS.dissemination, 'Dissemination Plan')) {
+      newErrors.dissemination = validateWordCount(formData.dissemination, WORD_LIMITS.dissemination, 'Dissemination Plan');
+    }
+
+    if (!formData.policyImpact) newErrors.policyImpact = 'Policy impact is required';
+    if (formData.policyImpact && validateWordCount(formData.policyImpact, WORD_LIMITS.policyImpact, 'Policy Impact')) {
+      newErrors.policyImpact = validateWordCount(formData.policyImpact, WORD_LIMITS.policyImpact, 'Policy Impact');
+    }
+
+    if (!formData.scalability) newErrors.scalability = 'Scalability is required';
+    if (formData.scalability && validateWordCount(formData.scalability, WORD_LIMITS.scalability, 'Scalability')) {
+      newErrors.scalability = validateWordCount(formData.scalability, WORD_LIMITS.scalability, 'Scalability');
+    }
+
+    if (!formData.sustainability) newErrors.sustainability = 'Sustainability is required';
+    if (formData.sustainability && validateWordCount(formData.sustainability, WORD_LIMITS.sustainability, 'Sustainability')) {
+      newErrors.sustainability = validateWordCount(formData.sustainability, WORD_LIMITS.sustainability, 'Sustainability');
+    }
+
+    if (!formData.genderConsiderations) newErrors.genderConsiderations = 'Gender considerations are required';
+    if (formData.genderConsiderations && validateWordCount(formData.genderConsiderations, WORD_LIMITS.genderConsiderations, 'Gender Considerations')) {
+      newErrors.genderConsiderations = validateWordCount(formData.genderConsiderations, WORD_LIMITS.genderConsiderations, 'Gender Considerations');
+    }
+
+    if (!formData.ethicalImpact) newErrors.ethicalImpact = 'Ethical impact is required';
+    if (formData.ethicalImpact && validateWordCount(formData.ethicalImpact, WORD_LIMITS.ethicalImpact, 'Ethical Impact')) {
+      newErrors.ethicalImpact = validateWordCount(formData.ethicalImpact, WORD_LIMITS.ethicalImpact, 'Ethical Impact');
+    }
+
+    if (!formData.capacityBuilding) newErrors.capacityBuilding = 'Capacity building is required';
+    if (formData.capacityBuilding && validateWordCount(formData.capacityBuilding, WORD_LIMITS.capacityBuilding, 'Capacity Building')) {
+      newErrors.capacityBuilding = validateWordCount(formData.capacityBuilding, WORD_LIMITS.capacityBuilding, 'Capacity Building');
+    }
+
+    if (!formData.conflictOfInterest) newErrors.conflictOfInterest = 'Conflict of interest statement is required';
+    if (formData.conflictOfInterest && validateWordCount(formData.conflictOfInterest, WORD_LIMITS.conflictOfInterest, 'Conflict of Interest')) {
+      newErrors.conflictOfInterest = validateWordCount(formData.conflictOfInterest, WORD_LIMITS.conflictOfInterest, 'Conflict of Interest');
+    }
+
+    if (!formData.references) newErrors.references = 'References are required';
+    if (formData.references && validateWordCount(formData.references, WORD_LIMITS.references, 'References')) {
+      newErrors.references = validateWordCount(formData.references, WORD_LIMITS.references, 'References');
+    }
+
+    if (!formData.totalBudget) newErrors.totalBudget = 'Total budget is required';
+    if (formData.totalBudget && validateBudget(formData.totalBudget)) {
+      newErrors.totalBudget = validateBudget(formData.totalBudget);
+    }
+
+    // Compliance only for submission
+    if (isSubmitting && !formData.compliance) {
+      newErrors.compliance = 'You must confirm compliance before continuing';
+    }
+
+    return newErrors;
   };
 
   const handleSaveDraft = async (e) => {
     e.preventDefault();
-    if (!formData.projectTitle) {
-      setError('Project title is required');
+    
+    const newErrors = validateForm(false);
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setError('Please fix the errors below before saving');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     try {
       setLoading(true);
       setError(null);
-      await createProposalDraft(formData);
+      const result = await createProposalDraft(formData);
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
         navigate('/applicant/dashboard');
       }, 2000);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to save draft');
     } finally {
       setLoading(false);
     }
@@ -138,30 +318,163 @@ export default function SubmitProposal() {
 
   const handleSubmitProposal = async (e) => {
     e.preventDefault();
-    if (!formData.compliance) {
-      setError('You must confirm compliance before submitting');
-      return;
-    }
-    if (!formData.projectTitle) {
-      setError('Project title is required');
+
+    const newErrors = validateForm(true);
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setError('Please fix all errors before submitting');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     try {
       setLoading(true);
       setError(null);
-      await createProposalDraft({ ...formData, status: 'submitted' });
+      const draft = await createProposalDraft(formData);
+      // Note: Submit is marked as draft first, user uploads attachments then submits
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
         navigate('/applicant/dashboard');
       }, 2000);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to submit proposal');
     } finally {
       setLoading(false);
     }
   };
+
+  const renderTextarea = (fieldName, label, placeholder, wordLimit) => {
+    const wordCount = countWords(formData[fieldName]);
+    const isExceeded = wordCount > wordLimit;
+
+    return (
+      <div key={fieldName}>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <textarea
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          placeholder={placeholder}
+          className={`w-full min-h-[120px] resize-y rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 whitespace-pre-wrap break-words ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          }`}
+        />
+        <div className="flex justify-between mt-1">
+          <span className={`text-xs ${isExceeded ? 'text-danger font-semibold' : 'text-muted'}`}>
+            {wordCount} / {wordLimit} words
+          </span>
+          {errors[fieldName] && <span className="text-xs text-danger">{errors[fieldName]}</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSelectWithOther = (fieldName, label, options, otherFieldName) => {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <select
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          className={`w-full px-3 py-2 border rounded-md text-textMain bg-white outline-none focus:ring-2 ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          }`}
+        >
+          <option value="">Select option</option>
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+
+        {isOtherOption(formData[fieldName]) && (
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-textMain mb-2">
+              Please specify
+            </label>
+            <input
+              type="text"
+              name={otherFieldName}
+              value={formData[otherFieldName]}
+              onChange={handleInputChange}
+              placeholder="Enter details"
+              className={`w-full px-3 py-2 border rounded-md text-textMain outline-none focus:ring-2 ${
+                errors[otherFieldName]
+                  ? 'border-danger focus:ring-danger'
+                  : 'border-border focus:ring-accent focus:border-accent'
+              }`}
+            />
+            {errors[otherFieldName] && <span className="text-xs text-danger mt-1 block">{errors[otherFieldName]}</span>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSelect = (fieldName, label, options) => {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <select
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          disabled={fieldName === 'department' && !formData.faculty}
+          className={`w-full px-3 py-2 border rounded-md text-textMain bg-white outline-none focus:ring-2 ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          } ${fieldName === 'department' && !formData.faculty ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <option value="">Select option</option>
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+      </div>
+    );
+  };
+
+  const renderInputField = (fieldName, label, type = 'text') => {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <input
+          type={type}
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          className={`w-full px-3 py-2 border rounded-md text-textMain outline-none focus:ring-2 ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          }`}
+        />
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+      </div>
+    );
+  };
+
+  if (loadingDropdowns) return <Loader />;
 
   return (
     <DashboardLayout role="applicant">
@@ -177,191 +490,34 @@ export default function SubmitProposal() {
         </Alert>
       )}
 
-      {loadingDropdowns ? (
-        <Loader />
-      ) : (
-        <form onSubmit={handleSaveDraft} className="space-y-6">
+      <form onSubmit={handleSaveDraft} className="space-y-6">
         {/* Section A: Basic Project Information */}
         <Card title="A. Basic Project Information">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4">
-            <div className="md:col-span-2">
-              <Input
-                label="Title of Research/Innovation Project"
-                name="projectTitle"
-                value={formData.projectTitle}
-                onChange={handleInputChange}
-                required
-              />
+          <div className="space-y-4">
+            {renderInputField('projectTitle', 'Title of Research/Innovation Project')}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInputField('piFirstName', 'PI First Name')}
+              {renderInputField('piLastName', 'PI Last Name')}
             </div>
-            <Input
-              label="PI First Name"
-              name="piFirstName"
-              value={formData.piFirstName}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="PI Last Name"
-              name="piLastName"
-              value={formData.piLastName}
-              onChange={handleInputChange}
-            />
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Highest Qualifications
-              </label>
-              <select
-                name="piQualifications"
-                value={formData.piQualifications}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select qualification</option>
-                {qualificationOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderSelectWithOther('piQualifications', 'Highest Qualifications', qualificationOptions, 'piQualificationsOther')}
+              {renderSelect('piSex', 'Sex of PI', sexOptions)}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Sex of PI
-              </label>
-              <select
-                name="piSex"
-                value={formData.piSex}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select sex</option>
-                {sexOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderSelectWithOther('piDesignation', 'Designation of PI', designationOptions, 'piDesignationOther')}
+              {renderSelect('faculty', 'Faculty', faculties)}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Designation of PI
-              </label>
-              <select
-                name="piDesignation"
-                value={formData.piDesignation}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select designation</option>
-                {designationOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderSelect('department', 'Department', departments)}
+              {renderSelect('specialization', 'Research Specialization', disciplines)}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Faculty
-              </label>
-              <select
-                name="faculty"
-                value={formData.faculty}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select faculty</option>
-                {faculties.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInputField('piEmail', 'PI Email / Primary Contact Email', 'email')}
+              {renderInputField('piPhone', 'PI Telephone Number', 'tel')}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Department
-              </label>
-              <select
-                name="department"
-                value={formData.department}
-                onChange={handleInputChange}
-                disabled={!formData.faculty}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-              >
-                <option value="">Select department</option>
-                {departments.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Research Specialization
-              </label>
-              <select
-                name="specialization"
-                value={formData.specialization}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select specialization</option>
-                {disciplines.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="PI Email / Primary Contact Email"
-              name="piEmail"
-              type="email"
-              value={formData.piEmail}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="PI Telephone Number"
-              name="piPhone"
-              value={formData.piPhone}
-              onChange={handleInputChange}
-            />
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Type of Research
-              </label>
-              <select
-                name="researchType"
-                value={formData.researchType}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select research type</option>
-                {typeOfResearchOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Grant Call
-              </label>
-              <select
-                name="grantCall"
-                value={formData.grantCall}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select grant call</option>
-                {grantCalls.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderSelectWithOther('researchType', 'Type of Research', typeOfResearchOptions, 'researchTypeOther')}
+              {renderSelect('grantCall', 'Grant Call', grantCalls)}
             </div>
           </div>
         </Card>
@@ -369,125 +525,25 @@ export default function SubmitProposal() {
         {/* Section B: Project Description */}
         <Card title="B. Project Description">
           <div className="space-y-4">
-            <Input
-              label="Project Summary (max 200 words)"
-              name="summary"
-              value={formData.summary}
-              onChange={handleInputChange}
-              placeholder="Brief overview of the project"
-            />
-            <Input
-              label="Problem Statement (max 200 words)"
-              name="problemStatement"
-              value={formData.problemStatement}
-              onChange={handleInputChange}
-              placeholder="What problem does this research address?"
-            />
-            <Input
-              label="Proposed Solution (max 200 words)"
-              name="proposedSolution"
-              value={formData.proposedSolution}
-              onChange={handleInputChange}
-              placeholder="How will you solve the problem?"
-            />
-            <Input
-              label="Relevance to NDP IV / SDGs (max 300 words)"
-              name="relevance"
-              value={formData.relevance}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Innovativeness (max 200 words)"
-              name="innovativeness"
-              value={formData.innovativeness}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Main Objective"
-              name="mainObjective"
-              value={formData.mainObjective}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Specific Objectives"
-              name="specificObjectives"
-              value={formData.specificObjectives}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Methods Description (max 750 words)"
-              name="methods"
-              value={formData.methods}
-              onChange={handleInputChange}
-              placeholder="Describe your research methodology"
-            />
-            <Input
-              label="Outcomes / Impact / Outreach (max 250 words)"
-              name="outcomes"
-              value={formData.outcomes}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Translation / Dissemination Plan (max 250 words)"
-              name="dissemination"
-              value={formData.dissemination}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Potential Policy or Program Impact (max 250 words)"
-              name="policyImpact"
-              value={formData.policyImpact}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Scalability (max 200 words)"
-              name="scalability"
-              value={formData.scalability}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Sustainability (max 150 words)"
-              name="sustainability"
-              value={formData.sustainability}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Gender Considerations (max 150 words)"
-              name="genderConsiderations"
-              value={formData.genderConsiderations}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Ethical / Environmental Impact (max 200 words)"
-              name="ethicalImpact"
-              value={formData.ethicalImpact}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Capacity Building (max 250 words)"
-              name="capacityBuilding"
-              value={formData.capacityBuilding}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Conflict of Interest (max 150 words)"
-              name="conflictOfInterest"
-              value={formData.conflictOfInterest}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="References (max 250 words)"
-              name="references"
-              value={formData.references}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Total Budget"
-              name="totalBudget"
-              type="number"
-              value={formData.totalBudget}
-              onChange={handleInputChange}
-            />
+            {renderTextarea('summary', 'Project Summary (max 200 words)', 'Brief overview of the project', WORD_LIMITS.summary)}
+            {renderTextarea('problemStatement', 'Problem Statement (max 200 words)', 'What problem does this research address?', WORD_LIMITS.problemStatement)}
+            {renderTextarea('proposedSolution', 'Proposed Solution (max 200 words)', 'How will you solve the problem?', WORD_LIMITS.proposedSolution)}
+            {renderTextarea('relevance', 'Relevance to NDP IV / SDGs (max 300 words)', '', WORD_LIMITS.relevance)}
+            {renderTextarea('innovativeness', 'Innovativeness (max 200 words)', '', WORD_LIMITS.innovativeness)}
+            {renderTextarea('mainObjective', 'Main Objective', '', Infinity)}
+            {renderTextarea('specificObjectives', 'Specific Objectives', '', Infinity)}
+            {renderTextarea('methods', 'Methods Description (max 750 words)', 'Describe your research methodology', WORD_LIMITS.methods)}
+            {renderTextarea('outcomes', 'Outcomes / Impact / Outreach (max 250 words)', '', WORD_LIMITS.outcomes)}
+            {renderTextarea('dissemination', 'Translation / Dissemination Plan (max 250 words)', '', WORD_LIMITS.dissemination)}
+            {renderTextarea('policyImpact', 'Potential Policy or Program Impact (max 250 words)', '', WORD_LIMITS.policyImpact)}
+            {renderTextarea('scalability', 'Scalability (max 200 words)', '', WORD_LIMITS.scalability)}
+            {renderTextarea('sustainability', 'Sustainability (max 150 words)', '', WORD_LIMITS.sustainability)}
+            {renderTextarea('genderConsiderations', 'Gender Considerations (max 150 words)', '', WORD_LIMITS.genderConsiderations)}
+            {renderTextarea('ethicalImpact', 'Ethical / Environmental Impact (max 200 words)', '', WORD_LIMITS.ethicalImpact)}
+            {renderTextarea('capacityBuilding', 'Capacity Building (max 250 words)', '', WORD_LIMITS.capacityBuilding)}
+            {renderTextarea('conflictOfInterest', 'Conflict of Interest (max 150 words)', '', WORD_LIMITS.conflictOfInterest)}
+            {renderTextarea('references', 'References (max 250 words)', '', WORD_LIMITS.references)}
+            {renderInputField('totalBudget', 'Total Budget', 'number')}
           </div>
         </Card>
 
@@ -499,14 +555,17 @@ export default function SubmitProposal() {
               name="compliance"
               checked={formData.compliance}
               onChange={handleInputChange}
-              className="mt-1"
+              className={`mt-1 ${errors.compliance ? 'border-danger' : ''}`}
               id="compliance"
             />
-            <label htmlFor="compliance" className="text-sm text-textMain">
-              I confirm that the proposal being submitted complies with the KAB Research standard proposal
-              format. Submission of a proposal which does not comply with the said proposal format is an
-              automatic disqualification.
-            </label>
+            <div className="flex-1">
+              <label htmlFor="compliance" className="text-sm text-textMain">
+                I confirm that the proposal being submitted complies with the KAB Research standard proposal format.
+                Submission of a proposal which does not comply with the said proposal format is an automatic
+                disqualification.
+              </label>
+              {errors.compliance && <span className="text-xs text-danger block mt-1">{errors.compliance}</span>}
+            </div>
           </div>
         </Card>
 
@@ -514,25 +573,22 @@ export default function SubmitProposal() {
         <Card>
           <div className="flex gap-4 justify-end">
             <Button
-              type="button"
+              type="submit"
               variant="outline"
-              onClick={handleSaveDraft}
               disabled={loading}
+              onClick={(e) => {
+                e.preventDefault();
+                handleSaveDraft(e);
+              }}
             >
               Save Draft
             </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleSubmitProposal}
-              disabled={loading}
-            >
+            <Button type="button" variant="primary" disabled={loading} onClick={handleSubmitProposal}>
               {loading ? 'Processing...' : 'Submit Proposal'}
             </Button>
           </div>
         </Card>
       </form>
-      )}
     </DashboardLayout>
   );
 }

@@ -1,7 +1,12 @@
 import axiosClient from './axiosClient';
 
+// localStorage keys
+const PROPOSALS_STORAGE_KEY = 'kab_proposals';
+const NEXT_ID_STORAGE_KEY = 'kab_next_proposal_id';
+const NEXT_PROTOCOL_NUMBER_STORAGE_KEY = 'kab_next_protocol_number';
+
 // Mock data
-const mockProposals = [
+const initialMockProposals = [
   {
     id: 1,
     protocolNo: 'KAB-2024-001',
@@ -185,28 +190,121 @@ const mockAttachments = [
   },
 ];
 
+// localStorage helper functions
+const getStoredProposals = () => {
+  try {
+    const stored = localStorage.getItem(PROPOSALS_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    // First time: initialize with mock data
+    localStorage.setItem(PROPOSALS_STORAGE_KEY, JSON.stringify(initialMockProposals));
+    return initialMockProposals;
+  } catch (error) {
+    console.error('Error reading proposals from localStorage:', error);
+    return initialMockProposals;
+  }
+};
+
+const saveStoredProposals = (proposals) => {
+  try {
+    localStorage.setItem(PROPOSALS_STORAGE_KEY, JSON.stringify(proposals));
+  } catch (error) {
+    console.error('Error saving proposals to localStorage:', error);
+  }
+};
+
+const getNextProposalId = () => {
+  try {
+    const stored = localStorage.getItem(NEXT_ID_STORAGE_KEY);
+    const nextId = stored ? parseInt(stored) : initialMockProposals.length + 1;
+    localStorage.setItem(NEXT_ID_STORAGE_KEY, String(nextId + 1));
+    return nextId;
+  } catch (error) {
+    return initialMockProposals.length + 1;
+  }
+};
+
+const generateProtocolNumber = () => {
+  try {
+    const stored = localStorage.getItem(NEXT_PROTOCOL_NUMBER_STORAGE_KEY);
+    const year = new Date().getFullYear();
+    const currentYear = year.toString().slice(-2); // Get last 2 digits of year
+    
+    let nextNumber = stored ? parseInt(stored) : initialMockProposals.length + 1;
+    localStorage.setItem(NEXT_PROTOCOL_NUMBER_STORAGE_KEY, String(nextNumber + 1));
+    
+    return `PR${year}${String(nextNumber).padStart(3, '0')}`;
+  } catch (error) {
+    return `PR${new Date().getFullYear()}${String(initialMockProposals.length + 1).padStart(3, '0')}`;
+  }
+};
+
+const getStoredTeamMembers = (proposalId) => {
+  try {
+    const key = `kab_team_members_${proposalId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const saveStoredTeamMembers = (proposalId, members) => {
+  try {
+    const key = `kab_team_members_${proposalId}`;
+    localStorage.setItem(key, JSON.stringify(members));
+  } catch (error) {
+    console.error('Error saving team members to localStorage:', error);
+  }
+};
+
+const getStoredAttachments = (proposalId) => {
+  try {
+    const key = `kab_attachments_${proposalId}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    // Return default attachment structure
+    return mockAttachments;
+  } catch (error) {
+    return mockAttachments;
+  }
+};
+
+const saveStoredAttachments = (proposalId, attachments) => {
+  try {
+    const key = `kab_attachments_${proposalId}`;
+    localStorage.setItem(key, JSON.stringify(attachments));
+  } catch (error) {
+    console.error('Error saving attachments to localStorage:', error);
+  }
+};
+
 // API Functions
 
 export const getApplicantDashboard = async () => {
   try {
     // Replace with: const response = await axiosClient.get('/applicant/dashboard');
+    const proposals = getStoredProposals();
+    
+    const stats = {
+      totalProposals: proposals.length,
+      draft: proposals.filter((p) => p.status === 'draft').length,
+      underReview: proposals.filter((p) => p.status === 'under_review').length,
+      approved: proposals.filter((p) => p.status === 'approved').length,
+    };
+
     const response = await new Promise((resolve) =>
       setTimeout(
         () =>
           resolve({
             data: {
               applicantName: 'Dr. Jane Omondi',
-              recentProposals: mockProposals.slice(0, 3),
-              totalProposals: mockProposals.length,
-              draftCount: 1,
-              submittedCount: 1,
-              underReviewCount: 1,
-              stats: {
-                totalProposals: 3,
-                approved: 1,
-                underReview: 1,
-                draft: 1,
-              },
+              recentProposals: proposals.slice(0, 3),
+              ...stats,
+              stats,
             },
           }),
         500
@@ -221,8 +319,9 @@ export const getApplicantDashboard = async () => {
 export const getMyProposals = async () => {
   try {
     // Replace with: const response = await axiosClient.get('/applicant/proposals');
+    const proposals = getStoredProposals();
     const response = await new Promise((resolve) =>
-      setTimeout(() => resolve({ data: mockProposals }), 500)
+      setTimeout(() => resolve({ data: proposals }), 500)
     );
     return response.data;
   } catch (error) {
@@ -274,20 +373,39 @@ export const getProposalDetails = async (proposalId) => {
 export const createProposalDraft = async (payload) => {
   try {
     // Replace with: const response = await axiosClient.post('/applicant/proposals/draft', payload);
+    const id = getNextProposalId();
+    const protocolNo = generateProtocolNumber();
+    
+    const newProposal = {
+      id,
+      protocolNo,
+      title: payload.title || 'Untitled Proposal',
+      status: 'draft',
+      piName: `${payload.piFirstName} ${payload.piLastName}`,
+      piFirstName: payload.piFirstName,
+      piLastName: payload.piLastName,
+      piEmail: payload.piEmail,
+      piPhone: payload.piPhone,
+      faculty: payload.faculty,
+      department: payload.department,
+      attachmentsSummary: '0/9 Uploaded',
+      membersCount: 0,
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0],
+      ...payload,
+    };
+
+    // Save to localStorage
+    const proposals = getStoredProposals();
+    proposals.push(newProposal);
+    saveStoredProposals(proposals);
+
+    // Initialize empty team members and attachments for this proposal
+    saveStoredTeamMembers(id, []);
+    saveStoredAttachments(id, mockAttachments);
+
     const response = await new Promise((resolve) =>
-      setTimeout(
-        () =>
-          resolve({
-            data: {
-              id: mockProposals.length + 1,
-              protocolNo: `KAB-${new Date().getFullYear()}-${String(mockProposals.length + 1).padStart(3, '0')}`,
-              ...payload,
-              status: 'draft',
-              createdAt: new Date().toISOString(),
-            },
-          }),
-        500
-      )
+      setTimeout(() => resolve({ data: newProposal }), 500)
     );
     return response.data;
   } catch (error) {
@@ -330,13 +448,25 @@ export const deleteDraft = async (proposalId) => {
 export const submitProposal = async (proposalId) => {
   try {
     // Replace with: const response = await axiosClient.post(`/applicant/proposals/${proposalId}/submit`);
+    const proposals = getStoredProposals();
+    const proposal = proposals.find((p) => p.id === proposalId);
+
+    if (!proposal) {
+      throw new Error('Proposal not found');
+    }
+
+    // Check if attachments are uploaded (for now, just set to submitted)
+    proposal.status = 'submitted';
+    proposal.updatedAt = new Date().toISOString().split('T')[0];
+
+    saveStoredProposals(proposals);
+
     const response = await new Promise((resolve) =>
       setTimeout(
         () =>
           resolve({
             data: {
-              id: proposalId,
-              status: 'submitted',
+              ...proposal,
               submittedAt: new Date().toISOString(),
             },
           }),
@@ -352,8 +482,9 @@ export const submitProposal = async (proposalId) => {
 export const getProposalAttachments = async (proposalId) => {
   try {
     // Replace with: const response = await axiosClient.get(`/applicant/proposals/${proposalId}/attachments`);
+    const attachments = getStoredAttachments(proposalId);
     const response = await new Promise((resolve) =>
-      setTimeout(() => resolve({ data: mockAttachments }), 500)
+      setTimeout(() => resolve({ data: attachments }), 500)
     );
     return response.data;
   } catch (error) {
@@ -368,6 +499,28 @@ export const uploadProposalAttachment = async (proposalId, attachmentType, file)
     // formData.append('file', file);
     // formData.append('type', attachmentType);
     // const response = await axiosClient.post(`/applicant/proposals/${proposalId}/attachments`, formData);
+    
+    // Update attachment status in localStorage
+    const attachments = getStoredAttachments(proposalId);
+    const attachment = attachments.find((a) => a.type === attachmentType);
+    
+    if (attachment) {
+      attachment.status = 'uploaded';
+      attachment.fileName = file.name;
+      attachment.uploadedAt = new Date().toISOString();
+    }
+    
+    saveStoredAttachments(proposalId, attachments);
+
+    // Update proposal attachment summary
+    const proposals = getStoredProposals();
+    const proposal = proposals.find((p) => p.id === proposalId);
+    if (proposal) {
+      const uploadedCount = attachments.filter((a) => a.status === 'uploaded').length;
+      proposal.attachmentsSummary = `${uploadedCount}/9 Uploaded`;
+      saveStoredProposals(proposals);
+    }
+
     const response = await new Promise((resolve) =>
       setTimeout(
         () =>
@@ -402,8 +555,9 @@ export const deleteProposalAttachment = async (attachmentId) => {
 export const getProjectTeamMembers = async (proposalId) => {
   try {
     // Replace with: const response = await axiosClient.get(`/applicant/proposals/${proposalId}/team-members`);
+    const members = getStoredTeamMembers(proposalId);
     const response = await new Promise((resolve) =>
-      setTimeout(() => resolve({ data: mockTeamMembers }), 500)
+      setTimeout(() => resolve({ data: members }), 500)
     );
     return response.data;
   } catch (error) {
@@ -414,14 +568,29 @@ export const getProjectTeamMembers = async (proposalId) => {
 export const addProjectTeamMember = async (proposalId, payload) => {
   try {
     // Replace with: const response = await axiosClient.post(`/applicant/proposals/${proposalId}/team-members`, payload);
+    
+    const members = getStoredTeamMembers(proposalId);
+    const newMember = {
+      id: Math.random(),
+      ...payload,
+    };
+    
+    members.push(newMember);
+    saveStoredTeamMembers(proposalId, members);
+
+    // Update proposal member count
+    const proposals = getStoredProposals();
+    const proposal = proposals.find((p) => p.id === proposalId);
+    if (proposal) {
+      proposal.membersCount = members.length;
+      saveStoredProposals(proposals);
+    }
+
     const response = await new Promise((resolve) =>
       setTimeout(
         () =>
           resolve({
-            data: {
-              id: Math.random(),
-              ...payload,
-            },
+            data: newMember,
           }),
         500
       )

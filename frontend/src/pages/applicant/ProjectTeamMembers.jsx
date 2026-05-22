@@ -10,6 +10,7 @@ import Loader from '../../components/common/Loader';
 import { getProjectTeamMembers, addProjectTeamMember } from '../../api/applicantApi';
 import { getFaculties, getDepartments, getResearchDisciplines } from '../../api/referenceApi';
 import { sexOptions, qualificationOptions, designationOptions } from '../../utils/formOptions';
+import { validateKABEmail, validatePhone, isOtherOption } from '../../utils/validations';
 
 export default function ProjectTeamMembers() {
   const { id: proposalId } = useParams();
@@ -18,6 +19,7 @@ export default function ProjectTeamMembers() {
   const [error, setError] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [errors, setErrors] = useState({});
   
   // Dropdown loading states
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
@@ -29,8 +31,10 @@ export default function ProjectTeamMembers() {
     firstName: '',
     lastName: '',
     qualifications: '',
+    qualificationsOther: '',
     gender: '',
     designation: '',
+    designationOther: '',
     faculty: '',
     department: '',
     specialization: '',
@@ -99,17 +103,60 @@ export default function ProjectTeamMembers() {
       ...prev,
       [name]: value,
     }));
+    // Clear error for this field when user starts typing
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: '',
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Required fields
+    if (!formData.firstName) newErrors.firstName = 'First name is required';
+    if (!formData.lastName) newErrors.lastName = 'Last name is required';
+    if (!formData.qualifications) newErrors.qualifications = 'Qualifications are required';
+    if (isOtherOption(formData.qualifications) && !formData.qualificationsOther) {
+      newErrors.qualificationsOther = 'Please specify your qualifications';
+    }
+    if (!formData.gender) newErrors.gender = 'Gender is required';
+    if (!formData.designation) newErrors.designation = 'Designation is required';
+    if (isOtherOption(formData.designation) && !formData.designationOther) {
+      newErrors.designationOther = 'Please specify your designation';
+    }
+    if (!formData.faculty) newErrors.faculty = 'Faculty is required';
+    if (!formData.department) newErrors.department = 'Department is required';
+    if (!formData.specialization) newErrors.specialization = 'Specialization is required';
+    if (!formData.email) newErrors.email = 'Email is required';
+    const emailError = validateKABEmail(formData.email);
+    if (formData.email && emailError) {
+      newErrors.email = emailError;
+    }
+    if (!formData.phone) newErrors.phone = 'Phone number is required';
+    const phoneError = validatePhone(formData.phone);
+    if (formData.phone && phoneError) {
+      newErrors.phone = phoneError;
+    }
+
+    return newErrors;
   };
 
   const handleAddMember = async (e) => {
     e.preventDefault();
-    if (!formData.firstName || !formData.lastName) {
-      setSubmitError('First name and last name are required');
+
+    const newErrors = validateForm();
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setSubmitError('Please fix all errors before adding the member');
       return;
     }
 
     try {
       setSubmitError(null);
+      setErrors({});
       const newMember = await addProjectTeamMember(proposalId, formData);
       setTeamMembers((prev) => [...prev, newMember]);
       setSuccess('Team member added successfully');
@@ -117,8 +164,10 @@ export default function ProjectTeamMembers() {
         firstName: '',
         lastName: '',
         qualifications: '',
+        qualificationsOther: '',
         gender: '',
         designation: '',
+        designationOther: '',
         faculty: '',
         department: '',
         specialization: '',
@@ -127,11 +176,111 @@ export default function ProjectTeamMembers() {
       });
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(err.message || 'Failed to add team member');
     }
   };
 
   if (loading) return <Loader />;
+
+  const renderSelectWithOther = (fieldName, label, options, otherFieldName) => {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <select
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          className={`w-full px-3 py-2 border rounded-md text-textMain bg-white outline-none focus:ring-2 ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          }`}
+        >
+          <option value="">Select option</option>
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+
+        {isOtherOption(formData[fieldName]) && (
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-textMain mb-2">
+              Please specify
+            </label>
+            <input
+              type="text"
+              name={otherFieldName}
+              value={formData[otherFieldName]}
+              onChange={handleInputChange}
+              placeholder="Enter details"
+              className={`w-full px-3 py-2 border rounded-md text-textMain outline-none focus:ring-2 ${
+                errors[otherFieldName]
+                  ? 'border-danger focus:ring-danger'
+                  : 'border-border focus:ring-accent focus:border-accent'
+              }`}
+            />
+            {errors[otherFieldName] && <span className="text-xs text-danger mt-1 block">{errors[otherFieldName]}</span>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSelect = (fieldName, label, options) => {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <select
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          disabled={fieldName === 'department' && !formData.faculty}
+          className={`w-full px-3 py-2 border rounded-md text-textMain bg-white outline-none focus:ring-2 ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          } ${fieldName === 'department' && !formData.faculty ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <option value="">Select option</option>
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+      </div>
+    );
+  };
+
+  const renderInputField = (fieldName, label, type = 'text') => {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <input
+          type={type}
+          name={fieldName}
+          value={formData[fieldName]}
+          onChange={handleInputChange}
+          className={`w-full px-3 py-2 border rounded-md text-textMain outline-none focus:ring-2 ${
+            errors[fieldName]
+              ? 'border-danger focus:ring-danger'
+              : 'border-border focus:ring-accent focus:border-accent'
+          }`}
+        />
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+      </div>
+    );
+  };
 
   return (
     <DashboardLayout role="applicant">
@@ -148,142 +297,16 @@ export default function ProjectTeamMembers() {
       <Card title="Add New Team Member">
         <form onSubmit={handleAddMember} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="First Name"
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleInputChange}
-              required
-            />
-            <Input
-              label="Last Name"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleInputChange}
-              required
-            />
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Highest Qualifications
-              </label>
-              <select
-                name="qualifications"
-                value={formData.qualifications}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select qualification</option>
-                {qualificationOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Gender
-              </label>
-              <select
-                name="gender"
-                value={formData.gender}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select gender</option>
-                {sexOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Designation
-              </label>
-              <select
-                name="designation"
-                value={formData.designation}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select designation</option>
-                {designationOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Faculty
-              </label>
-              <select
-                name="faculty"
-                value={formData.faculty}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select faculty</option>
-                {faculties.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Department
-              </label>
-              <select
-                name="department"
-                value={formData.department}
-                onChange={handleInputChange}
-                disabled={!formData.faculty}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-              >
-                <option value="">Select department</option>
-                {departments.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-2">
-                Research Specialization
-              </label>
-              <select
-                name="specialization"
-                value={formData.specialization}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-border rounded-md text-textMain bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Select specialization</option>
-                {disciplines.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Input
-              label="KAB Email Address"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleInputChange}
-            />
-            <Input
-              label="Telephone Number"
-              name="phone"
-              value={formData.phone}
-              onChange={handleInputChange}
-            />
+            {renderInputField('firstName', 'First Name')}
+            {renderInputField('lastName', 'Last Name')}
+            {renderSelectWithOther('qualifications', 'Highest Qualifications', qualificationOptions, 'qualificationsOther')}
+            {renderSelect('gender', 'Gender', sexOptions)}
+            {renderSelectWithOther('designation', 'Designation', designationOptions, 'designationOther')}
+            {renderSelect('faculty', 'Faculty', faculties)}
+            {renderSelect('department', 'Department', departments)}
+            {renderSelect('specialization', 'Research Specialization', disciplines)}
+            {renderInputField('email', 'KAB Email Address', 'email')}
+            {renderInputField('phone', 'Telephone Number', 'tel')}
           </div>
           <div className="flex justify-end">
             <Button type="submit" variant="primary">
