@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import PageHeader from '../../../components/layout/PageHeader';
 import Card from '../../../components/common/Card';
@@ -12,6 +13,7 @@ import { getApprovedProposals } from '../../../api/adminApi';
 
 export default function ApprovedProposals() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,10 +51,10 @@ export default function ApprovedProposals() {
     },
   ];
 
-  if (loading) return <DashboardLayout role="admin"><Loader /></DashboardLayout>;
+  if (loading) return <DashboardLayout role={user?.role}><Loader /></DashboardLayout>;
 
   return (
-    <DashboardLayout role="admin">
+    <DashboardLayout role={user?.role}>
       <PageHeader
         title="Approved Proposals"
         subtitle={`${proposals.length} proposal${proposals.length !== 1 ? 's' : ''} accepted for funding`}

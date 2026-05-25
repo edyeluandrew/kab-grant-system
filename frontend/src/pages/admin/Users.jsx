@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -10,6 +11,7 @@ import Table from '../../components/common/Table';
 import { getUsers, activateUser, deactivateUser } from '../../api/adminApi';
 
 export default function Users() {
+  const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -92,10 +94,10 @@ export default function Users() {
     },
   ];
 
-  if (loading) return <DashboardLayout role="admin"><Loader /></DashboardLayout>;
+  if (loading) return <DashboardLayout role={user?.role}><Loader /></DashboardLayout>;
 
   return (
-    <DashboardLayout role="admin">
+    <DashboardLayout role={user?.role}>
       <PageHeader
         title="System Users"
         subtitle={`${users.length} registered staff / student accounts`}

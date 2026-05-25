@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { canCreateReviewers, canManageReviewers } from '../../constants/permissions';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -30,6 +32,12 @@ const emptyForm = {
 };
 
 export default function Reviewers() {
+  const { user } = useAuth();
+
+  // Permission checks
+  const canCreate = canCreateReviewers(user?.role);
+  const canRemove = canManageReviewers(user?.role);
+
   const [reviewers, setReviewers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formLoading, setFormLoading] = useState(false);
@@ -70,9 +78,15 @@ export default function Reviewers() {
     if (!formData.gender) errors.gender = 'Gender is required';
     if (!formData.email) errors.email = 'Email is required';
     if (!formData.password) errors.password = 'Password is required';
-    if (formData.password && formData.password.length < 8) errors.password = 'Password must be at least 8 characters';
-    if (!formData.confirm_password) errors.confirm_password = 'Please confirm the password';
-    if (formData.password && formData.confirm_password && formData.password !== formData.confirm_password) {
+    if (formData.password && formData.password.length < 8)
+      errors.password = 'Password must be at least 8 characters';
+    if (!formData.confirm_password)
+      errors.confirm_password = 'Please confirm the password';
+    if (
+      formData.password &&
+      formData.confirm_password &&
+      formData.password !== formData.confirm_password
+    ) {
       errors.confirm_password = 'Passwords do not match';
     }
     return errors;
@@ -86,7 +100,6 @@ export default function Reviewers() {
       setFormError('Please fix the errors below.');
       return;
     }
-
     try {
       setFormLoading(true);
       setFormError(null);
@@ -127,7 +140,9 @@ export default function Reviewers() {
         value={formData[name]}
         onChange={handleInputChange}
         className={`w-full px-3 py-2 border rounded-md text-sm text-textMain outline-none focus:ring-2 ${
-          formErrors[name] ? 'border-danger focus:ring-danger' : 'border-border focus:ring-accent focus:border-accent'
+          formErrors[name]
+            ? 'border-danger focus:ring-danger'
+            : 'border-border focus:ring-accent focus:border-accent'
         }`}
       />
       {formErrors[name] && <p className="text-xs text-danger mt-1">{formErrors[name]}</p>}
@@ -142,12 +157,17 @@ export default function Reviewers() {
         value={formData[name]}
         onChange={handleInputChange}
         className={`w-full px-3 py-2 border rounded-md text-sm text-textMain bg-white outline-none focus:ring-2 ${
-          formErrors[name] ? 'border-danger focus:ring-danger' : 'border-border focus:ring-accent focus:border-accent'
+          formErrors[name]
+            ? 'border-danger focus:ring-danger'
+            : 'border-border focus:ring-accent focus:border-accent'
         }`}
       >
         <option value="">Select...</option>
         {options.map((opt) => (
-          <option key={typeof opt === 'string' ? opt : opt.value} value={typeof opt === 'string' ? opt : opt.value}>
+          <option
+            key={typeof opt === 'string' ? opt : opt.value}
+            value={typeof opt === 'string' ? opt : opt.value}
+          >
             {typeof opt === 'string' ? opt : opt.label}
           </option>
         ))}
@@ -156,63 +176,74 @@ export default function Reviewers() {
     </div>
   );
 
+  // Columns — Remove button only for sgo_admin
   const reviewerColumns = [
     { key: 'name', label: 'Name', render: (row) => `${row.first_name} ${row.surname}` },
     { key: 'phone', label: 'Phone' },
     { key: 'email', label: 'Email' },
     { key: 'research_discipline', label: 'Research Discipline' },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (row) => (
-        <Button
-          size="sm"
-          variant="danger"
-          disabled={actionLoading === row.id}
-          onClick={() => handleRemoveReviewer(row)}
-        >
-          {actionLoading === row.id ? 'Removing...' : 'Remove'}
-        </Button>
-      ),
-    },
+    ...(canRemove
+      ? [
+          {
+            key: 'actions',
+            label: 'Actions',
+            render: (row) => (
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={actionLoading === row.id}
+                onClick={() => handleRemoveReviewer(row)}
+              >
+                {actionLoading === row.id ? 'Removing...' : 'Remove'}
+              </Button>
+            ),
+          },
+        ]
+      : []),
   ];
 
-  if (loading) return <DashboardLayout role="admin"><Loader /></DashboardLayout>;
+  if (loading) return <DashboardLayout role={user?.role}><Loader /></DashboardLayout>;
 
   return (
-    <DashboardLayout role="admin">
+    <DashboardLayout role={user?.role}>
       <PageHeader
         title="Reviewers"
-        subtitle="Create and manage reviewer accounts"
+        subtitle={canCreate ? 'Create and manage reviewer accounts' : 'View registered reviewers'}
       />
 
       {error && <Alert variant="danger">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
-      {/* Create Reviewer Form */}
-      <Card title="Create New Reviewer Account" className="mb-6">
-        {formError && <Alert variant="danger">{formError}</Alert>}
-        <form onSubmit={handleCreateReviewer} className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderField('first_name', 'First Name')}
-            {renderField('surname', 'Surname')}
-            {renderSelect('gender', 'Gender', genderOptions)}
-            {renderField('phone', 'Phone Number', 'tel')}
-            {renderSelect('research_discipline', 'Research Discipline', disciplineOptions)}
-            {renderField('email', 'Email Address', 'email')}
-            {renderField('password', 'Temporary Password', 'password')}
-            {renderField('confirm_password', 'Confirm Password', 'password')}
-          </div>
-          <div className="flex justify-end mt-4">
-            <Button type="submit" variant="primary" disabled={formLoading}>
-              {formLoading ? 'Creating...' : 'Create Reviewer Account'}
-            </Button>
-          </div>
-        </form>
-      </Card>
 
-      {/* Reviewers List */}
-      <Card title="Registered Reviewers" subtitle={`${reviewers.length} reviewer${reviewers.length !== 1 ? 's' : ''}`}>
+      {/* Create Reviewer Form — only for sgo_admin */}
+      {canCreate && (
+        <Card title="Create New Reviewer Account" className="mb-6">
+          {formError && <Alert variant="danger">{formError}</Alert>}
+          <form onSubmit={handleCreateReviewer} className="mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderField('first_name', 'First Name')}
+              {renderField('surname', 'Surname')}
+              {renderSelect('gender', 'Gender', genderOptions)}
+              {renderField('phone', 'Phone Number', 'tel')}
+              {renderSelect('research_discipline', 'Research Discipline', disciplineOptions)}
+              {renderField('email', 'Email Address', 'email')}
+              {renderField('password', 'Temporary Password', 'password')}
+              {renderField('confirm_password', 'Confirm Password', 'password')}
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button type="submit" variant="primary" disabled={formLoading}>
+                {formLoading ? 'Creating...' : 'Create Reviewer Account'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {/* Reviewers List — visible to both roles */}
+      <Card
+        title="Registered Reviewers"
+        subtitle={`${reviewers.length} reviewer${reviewers.length !== 1 ? 's' : ''}`}
+      >
         <Table
           columns={reviewerColumns}
           data={reviewers}

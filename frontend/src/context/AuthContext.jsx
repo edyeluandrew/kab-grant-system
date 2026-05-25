@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { ROLE_DASHBOARD_PATHS, ROLES } from '../constants/roles';
 
 const AuthContext = createContext(null);
 
@@ -39,12 +40,8 @@ export function AuthProvider({ children }) {
   const isAuthenticated = !!user;
 
   const redirectPathForRole = (role) => {
-    switch (role) {
-      case 'admin': return '/admin/dashboard';
-      case 'reviewer': return '/reviewer/dashboard';
-      case 'staff':
-      default: return '/applicant/dashboard';
-    }
+    // Use centralized role dashboard paths
+    return ROLE_DASHBOARD_PATHS[role] || '/login';
   };
 
   return (

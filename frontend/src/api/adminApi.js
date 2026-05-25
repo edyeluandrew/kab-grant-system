@@ -27,23 +27,23 @@ const mockReviewers = [
 
 const mockProposals = {
   submitted: [
-    { id: 1, protocol_no: 'PR2026/PROPOSAL/001', title: 'AI-Powered Disease Diagnosis System', grant_type: 'Research', pi_first_name: 'Jane', pi_last_name: 'Omondi', pi_phone: '+256712345678', attachments_count: 9, status: 'Submitted', created_at: '2026-05-01' },
-    { id: 2, protocol_no: 'PR2026/PROPOSAL/002', title: 'Water Purification Technology for Rural Areas', grant_type: 'Innovation', pi_first_name: 'Prof. John', pi_last_name: 'Kipchoge', pi_phone: '+256723456789', attachments_count: 9, status: 'Submitted', created_at: '2026-05-03' },
+    { id: 1, protocol_no: 'PR2026/PROPOSAL/001', title: 'AI-Powered Disease Diagnosis System', grant_type: 'Research', pi_first_name: 'Jane', pi_last_name: 'Omondi', pi_phone: '+256712345678', attachments_count: 9, status: 'Submitted', created_at: '2026-05-01', assigned_reviewers: [] },
+    { id: 2, protocol_no: 'PR2026/PROPOSAL/002', title: 'Water Purification Technology for Rural Areas', grant_type: 'Innovation', pi_first_name: 'Prof. John', pi_last_name: 'Kipchoge', pi_phone: '+256723456789', attachments_count: 9, status: 'Submitted', created_at: '2026-05-03', assigned_reviewers: [] },
   ],
   scheduled: [
-    { id: 3, protocol_no: 'PR2026/PROPOSAL/003', title: 'Climate-Smart Agriculture Solutions', grant_type: 'Research', pi_first_name: 'Dr. Grace', pi_last_name: 'Kiplagat', pi_phone: '+256734567890', attachments_count: 9, status: 'Scheduled for Review', assigned_reviewers: [{ id: 1, name: 'Prof. Samuel Wafula' }, { id: 2, name: 'Dr. Mary Achieng' }], created_at: '2026-04-20' },
+    { id: 3, protocol_no: 'PR2026/PROPOSAL/003', title: 'Climate-Smart Agriculture Solutions', grant_type: 'Research', pi_first_name: 'Dr. Grace', pi_last_name: 'Kiplagat', pi_phone: '+256734567890', attachments_count: 9, status: 'Scheduled for Review', created_at: '2026-04-20', assigned_reviewers: [{ id: 1, first_name: 'Prof. Samuel', surname: 'Wafula', review_deadline: '2026-06-15', submitted_review: false }, { id: 2, first_name: 'Dr. Mary', surname: 'Achieng', review_deadline: '2026-06-15', submitted_review: false }] },
   ],
   reviewed: [
-    { id: 4, protocol_no: 'PR2026/PROPOSAL/004', title: 'Blockchain for Land Registry', grant_type: 'Innovation', pi_first_name: 'David', pi_last_name: 'Mugisha', pi_phone: '+256745678901', attachments_count: 9, status: 'Reviewed', created_at: '2026-04-10' },
+    { id: 4, protocol_no: 'PR2026/PROPOSAL/004', title: 'Blockchain for Land Registry', grant_type: 'Innovation', pi_first_name: 'David', pi_last_name: 'Mugisha', pi_phone: '+256745678901', attachments_count: 9, status: 'Reviewed', created_at: '2026-04-10', assigned_reviewers: [{ id: 1, first_name: 'Prof. Samuel', surname: 'Wafula', review_deadline: '2026-06-01', submitted_review: true }, { id: 3, first_name: 'Dr. John', surname: 'Byarugaba', review_deadline: '2026-06-01', submitted_review: true }] },
   ],
   approved: [
-    { id: 5, protocol_no: 'PR2026/PROPOSAL/005', title: 'Solar Energy for Rural Schools', grant_type: 'Innovation', pi_first_name: 'Alice', pi_last_name: 'Nakato', pi_phone: '+256756789012', attachments_count: 9, status: 'Approved', created_at: '2026-03-15' },
+    { id: 5, protocol_no: 'PR2026/PROPOSAL/005', title: 'Solar Energy for Rural Schools', grant_type: 'Innovation', pi_first_name: 'Alice', pi_last_name: 'Nakato', pi_phone: '+256756789012', attachments_count: 9, status: 'Approved', created_at: '2026-03-15', assigned_reviewers: [] },
   ],
   rejected: [
-    { id: 6, protocol_no: 'PR2026/PROPOSAL/006', title: 'Mobile Health Monitoring System', grant_type: 'Research', pi_first_name: 'Brian', pi_last_name: 'Tumwine', pi_phone: '+256767890123', attachments_count: 9, status: 'Rejected', created_at: '2026-03-10' },
+    { id: 6, protocol_no: 'PR2026/PROPOSAL/006', title: 'Mobile Health Monitoring System', grant_type: 'Research', pi_first_name: 'Brian', pi_last_name: 'Tumwine', pi_phone: '+256767890123', attachments_count: 9, status: 'Rejected', created_at: '2026-03-10', assigned_reviewers: [] },
   ],
   awarded: [
-    { id: 7, protocol_no: 'PR2026/PROPOSAL/007', title: 'Cassava Disease Detection Using ML', grant_type: 'Research', pi_first_name: 'Ruth', pi_last_name: 'Atukunda', pi_phone: '+256778901234', attachments_count: 9, status: 'Awarded', created_at: '2026-02-20' },
+    { id: 7, protocol_no: 'PR2026/PROPOSAL/007', title: 'Cassava Disease Detection Using ML', grant_type: 'Research', pi_first_name: 'Ruth', pi_last_name: 'Atukunda', pi_phone: '+256778901234', attachments_count: 9, status: 'Awarded', created_at: '2026-02-20', assigned_reviewers: [] },
   ],
 };
 
@@ -323,5 +323,112 @@ export const makeDecision = async (proposalId, decision, note = '') => {
     console.warn('Using mock make decision (API unavailable)', apiError.message);
     await delay();
     return { success: true, decision };
+  }
+};
+
+// ─── Review Deadline Management ───────────────────────────────────────────────
+
+/**
+ * Set review deadline for assigned reviewers
+ * @param {number} proposalId - The proposal ID
+ * @param {number} reviewerId - The reviewer ID
+ * @param {string} deadline - Deadline date (YYYY-MM-DD format)
+ */
+export const setReviewDeadline = async (proposalId, reviewerId, deadline) => {
+  try {
+    const response = await axiosClient.post(`/admin/proposals/${proposalId}/reviewers/${reviewerId}/deadline`, { 
+      deadline 
+    });
+    return response.data;
+  } catch (apiError) {
+    console.warn('Using mock set review deadline (API unavailable)', apiError.message);
+    await delay();
+    
+    // Update mock data
+    Object.values(mockProposals).forEach(proposalList => {
+      const proposal = proposalList.find(p => p.id === proposalId);
+      if (proposal && proposal.assigned_reviewers) {
+        const reviewer = proposal.assigned_reviewers.find(r => r.id === reviewerId);
+        if (reviewer) {
+          reviewer.review_deadline = deadline;
+        }
+      }
+    });
+    
+    return { success: true, message: 'Review deadline set successfully' };
+  }
+};
+
+/**
+ * Get review status for a proposal
+ * @param {number} proposalId - The proposal ID
+ */
+export const getReviewStatus = async (proposalId) => {
+  try {
+    const response = await axiosClient.get(`/admin/proposals/${proposalId}/review-status`);
+    return response.data;
+  } catch (apiError) {
+    console.warn('Using mock get review status (API unavailable)', apiError.message);
+    await delay();
+    
+    // Get from mock data
+    let proposal = null;
+    Object.values(mockProposals).forEach(proposalList => {
+      const found = proposalList.find(p => p.id === proposalId);
+      if (found) proposal = found;
+    });
+    
+    if (!proposal) {
+      return { reviewers: [] };
+    }
+    
+    const reviewers = (proposal.assigned_reviewers || []).map(r => ({
+      id: r.id,
+      first_name: r.first_name,
+      surname: r.surname,
+      review_deadline: r.review_deadline,
+      submitted_review: r.submitted_review,
+      days_overdue: r.review_deadline ? Math.max(0, Math.ceil((new Date() - new Date(r.review_deadline)) / (1000 * 60 * 60 * 24))) : 0,
+    }));
+    
+    return {
+      proposalId,
+      total_reviewers: reviewers.length,
+      completed_reviews: reviewers.filter(r => r.submitted_review).length,
+      pending_reviews: reviewers.filter(r => !r.submitted_review).length,
+      overdue_reviews: reviewers.filter(r => !r.submitted_review && new Date() > new Date(r.review_deadline || '2099-12-31')).length,
+      reviewers,
+    };
+  }
+};
+
+/**
+ * Mark reviewer's submission status
+ * @param {number} proposalId - The proposal ID
+ * @param {number} reviewerId - The reviewer ID
+ * @param {boolean} submitted - Whether review has been submitted
+ */
+export const updateReviewSubmission = async (proposalId, reviewerId, submitted) => {
+  try {
+    const response = await axiosClient.put(`/admin/proposals/${proposalId}/reviewers/${reviewerId}/submission`, { 
+      submitted_review: submitted
+    });
+    return response.data;
+  } catch (apiError) {
+    console.warn('Using mock update review submission (API unavailable)', apiError.message);
+    await delay();
+    
+    // Update mock data
+    Object.values(mockProposals).forEach(proposalList => {
+      const proposal = proposalList.find(p => p.id === proposalId);
+      if (proposal && proposal.assigned_reviewers) {
+        const reviewer = proposal.assigned_reviewers.find(r => r.id === reviewerId);
+        if (reviewer) {
+          reviewer.submitted_review = submitted;
+        }
+      }
+    });
+    
+    return { success: true, message: 'Review submission status updated' };
   }
 };

@@ -9,6 +9,7 @@ import Loader from '../../components/common/Loader';
 import Alert from '../../components/common/Alert';
 import { getAssignedProposalDetail, submitReview } from '../../api/reviewerApi';
 import { useAuth } from '../../context/AuthContext';
+import { downloadFile } from '../../utils/downloadUtils';
 
 const RECOMMENDATIONS = ['Approve', 'Minor Revisions', 'Major Revisions', 'Reject'];
 
@@ -21,7 +22,7 @@ export default function ReviewProposalDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({ recommendation: '', comments: '', report_file: null });
+  const [form, setForm] = useState({ score: 5, recommendation: '', comments: '', report_file: null });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -170,14 +171,12 @@ export default function ReviewProposalDetail() {
                             <p className="font-medium text-textMain">{a.attachment_type}</p>
                             <p className="text-xs text-muted">{a.file_name}</p>
                           </div>
-                          <a
-                            href={a.cloudinary_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary text-xs font-medium hover:underline"
+                          <button
+                            onClick={() => downloadFile(a.cloudinary_url, a.file_name)}
+                            className="text-primary text-xs font-medium hover:underline transition"
                           >
                             Download
-                          </a>
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -196,6 +195,26 @@ export default function ReviewProposalDetail() {
                     </div>
                     {proposal.my_review && (
                       <div className="space-y-3 text-sm">
+                        <div>
+                          <p className="text-xs text-muted mb-1">Overall Score</p>
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((score) => (
+                                <div
+                                  key={score}
+                                  className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
+                                    proposal.my_review.score >= score
+                                      ? 'bg-primary text-white'
+                                      : 'bg-border text-muted'
+                                  }`}
+                                >
+                                  {score}
+                                </div>
+                              ))}
+                            </div>
+                            <span className="text-sm font-semibold text-primary">{proposal.my_review.score}/10</span>
+                          </div>
+                        </div>
                         <div>
                           <p className="text-xs text-muted mb-1">Recommendation</p>
                           <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
@@ -245,6 +264,35 @@ export default function ReviewProposalDetail() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
+                      {/* Score Rating */}
+                      <div>
+                        <label className="block text-xs font-semibold text-textMain mb-2 uppercase tracking-wide">
+                          Overall Score <span className="text-danger">*</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((score) => (
+                              <button
+                                key={score}
+                                type="button"
+                                onClick={() => setForm((prev) => ({ ...prev, score }))}
+                                className={`w-8 h-8 rounded-full text-xs font-bold transition ${
+                                  form.score >= score
+                                    ? 'bg-primary text-white'
+                                    : 'bg-border text-muted hover:bg-border/60'
+                                }`}
+                              >
+                                {score}
+                              </button>
+                            ))}
+                          </div>
+                          <span className="text-sm font-semibold text-primary ml-2">{form.score}/10</span>
+                        </div>
+                        <p className="text-xs text-muted mt-1.5">
+                          {form.score <= 3 ? '❌ Poor' : form.score <= 5 ? '⚠️ Fair' : form.score <= 7 ? '✓ Good' : '✓✓ Excellent'}
+                        </p>
+                      </div>
+
                       <div>
                         <label className="block text-xs font-semibold text-textMain mb-1.5 uppercase tracking-wide">
                           Recommendation <span className="text-danger">*</span>

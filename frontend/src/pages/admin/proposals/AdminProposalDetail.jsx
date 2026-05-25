@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 import { Download, ArrowLeft } from 'lucide-react';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import PageHeader from '../../../components/layout/PageHeader';
@@ -7,6 +8,7 @@ import Card from '../../../components/common/Card';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Alert from '../../../components/common/Alert';
+import { downloadFile } from '../../../utils/downloadUtils';
 import Loader from '../../../components/common/Loader';
 import { getAdminProposalDetail } from '../../../api/adminApi';
 
@@ -50,6 +52,7 @@ function SectionBlock({ title, content }) {
 export default function AdminProposalDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -69,12 +72,12 @@ export default function AdminProposalDetail() {
     fetchData();
   }, [id]);
 
-  if (loading) return <DashboardLayout role="admin"><Loader /></DashboardLayout>;
-  if (error) return <DashboardLayout role="admin"><Alert variant="danger">{error}</Alert></DashboardLayout>;
-  if (!proposal) return <DashboardLayout role="admin"><Alert variant="info">Proposal not found.</Alert></DashboardLayout>;
+  if (loading) return <DashboardLayout role={user?.role}><Loader /></DashboardLayout>;
+  if (error) return <DashboardLayout role={user?.role}><Alert variant="danger">{error}</Alert></DashboardLayout>;
+  if (!proposal) return <DashboardLayout role={user?.role}><Alert variant="info">Proposal not found.</Alert></DashboardLayout>;
 
   return (
-    <DashboardLayout role="admin">
+    <DashboardLayout role={user?.role}>
       <div className="mb-4">
         <button
           onClick={() => navigate(-1)}
@@ -194,15 +197,13 @@ export default function AdminProposalDetail() {
                       <td className="py-3 px-4 text-textMain text-xs">{att.file_name}</td>
                       <td className="py-3 px-4 text-muted text-xs">{att.uploaded_at}</td>
                       <td className="py-3 px-4">
-                        <a
-                          href={att.cloudinary_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                        <button
+                          onClick={() => downloadFile(att.cloudinary_url, att.file_name)}
+                          className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-medium transition"
                         >
                           <Download className="w-3 h-3" />
                           Download
-                        </a>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -235,15 +236,13 @@ export default function AdminProposalDetail() {
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-muted">Submitted: {report.submitted_at}</p>
                     {report.report_file_url && report.report_file_url !== '#' && (
-                      <a
-                        href={report.report_file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                      <button
+                        onClick={() => downloadFile(report.report_file_url, `review-report-${report.id}.pdf`)}
+                        className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-medium transition"
                       >
                         <Download className="w-3 h-3" />
                         Download Report
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>

@@ -105,6 +105,7 @@ export const getAssignedProposalDetail = async (id) => {
 export const submitReview = async (proposalId, payload) => {
   try {
     const formData = new FormData();
+    formData.append('score', payload.score || 5);
     formData.append('recommendation', payload.recommendation);
     if (payload.comments) formData.append('comments', payload.comments);
     if (payload.report_file) formData.append('report_file', payload.report_file);
@@ -123,6 +124,7 @@ export const submitReview = async (proposalId, payload) => {
     const newReview = {
       id: Date.now(),
       proposal_id: proposalId,
+      score: payload.score || 5,
       recommendation: payload.recommendation,
       comments: payload.comments || '',
       report_file_url: payload.report_file ? '#' : null,

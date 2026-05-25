@@ -75,46 +75,46 @@ export default function Register() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-6">
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#F4F4F4' }}>
         <div className="text-center max-w-sm">
           <img src="/log1.jpg" alt="KAB-FIR Logo" className="h-20 w-20 rounded-xl mx-auto mb-6" />
-          <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="w-8 h-8 text-success" />
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#D4F4DD' }}>
+            <CheckCircle2 className="w-8 h-8" style={{ color: '#16A34A' }} />
           </div>
-          <h2 className="text-xl font-bold text-textMain mb-2">Registration Successful!</h2>
-          <p className="text-muted text-sm">Your account has been created. Redirecting you to login...</p>
+          <h2 className="text-xl font-bold mb-2" style={{ color: '#4B5563' }}>Registration Successful!</h2>
+          <p className="text-sm" style={{ color: '#7A8793' }}>Your account has been created. Redirecting you to login...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-6 py-12">
+    <div className="min-h-screen flex items-center justify-center px-6 py-12" style={{ backgroundColor: '#F4F4F4' }}>
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
             <img src="/log1.jpg" alt="KAB-FIR Logo" className="h-16 w-16 rounded-lg" />
             <div>
-              <Link to="/" className="inline-block text-primary font-extrabold text-2xl tracking-tight">
+              <Link to="/" className="inline-block font-extrabold text-2xl tracking-tight" style={{ color: '#0078B8' }}>
                 KAB-FIR
               </Link>
-              <p className="text-xs text-muted mt-1">Fund for Innovation & Research</p>
+              <p className="text-xs mt-1" style={{ color: '#7A8793' }}>Fund for Innovation & Research</p>
             </div>
           </div>
-          <h2 className="text-xl font-bold text-textMain mt-4">Create your account</h2>
-          <p className="text-muted text-sm mt-1">
+          <h2 className="text-xl font-bold mt-4" style={{ color: '#4B5563' }}>Create your account</h2>
+          <p className="text-sm mt-1" style={{ color: '#7A8793' }}>
             Register using your Kabale University email address
           </p>
         </div>
 
         {error && (
-          <div className="mb-5 flex items-center gap-2 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3">
+          <div className="mb-5 flex items-center gap-2 text-sm rounded-lg px-4 py-3" style={{ backgroundColor: '#FFE8E8', border: '1px solid #FF8080', color: '#FF2B2B' }}>
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </div>
         )}
 
-        <div className="bg-surface border border-border rounded-2xl p-8 shadow-sm">
+        <div className="rounded-2xl p-8 shadow-sm" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D9E2E7' }}>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Info */}
             <div>

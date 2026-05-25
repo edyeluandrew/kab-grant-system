@@ -13,10 +13,11 @@ const mockUsersDB = [
     phone: '+256700000001',
     email: 'admin@kab.ac.ug',
     password: 'admin1234',
-    role: 'admin',
+    role: 'super_admin',
     faculty_id: 1,
     department_id: 101,
     is_active: true,
+    must_change_password: false,
     access_token: 'mock_admin_token_abc123',
     refresh_token: 'mock_admin_refresh_abc123',
   },
@@ -33,6 +34,7 @@ const mockUsersDB = [
     faculty_id: 2,
     department_id: 201,
     is_active: true,
+    must_change_password: false,
     access_token: 'mock_staff_token_xyz456',
     refresh_token: 'mock_staff_refresh_xyz456',
   },
@@ -53,21 +55,35 @@ const mockUsersDB = [
     access_token: 'mock_reviewer_token_rev789',
     refresh_token: 'mock_reviewer_refresh_rev789',
   },
+  {
+    id: 4,
+    first_name: 'SGO',
+    surname: 'Admin',
+    other_name: '',
+    gender: 'Male',
+    phone: '+256700000004',
+    email: 'sgo.admin@kab.ac.ug',
+    password: 'sgo1234',
+    role: 'sgo_admin',
+    faculty_id: null,
+    department_id: null,
+    is_active: true,
+    must_change_password: false,
+    access_token: 'mock_sgo_token_sgo999',
+    refresh_token: 'mock_sgo_refresh_sgo999',
+  },
 ];
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 
 export const registerUser = async (payload) => {
   try {
-    // Try real API first
     const response = await axiosClient.post('/auth/register', payload);
     return response.data;
   } catch (apiError) {
-    // Fall back to mock data
     console.warn('Using mock register (API unavailable)', apiError.message);
     await delay();
 
-    // Client-side validation (also done server-side)
     if (!payload.email.endsWith('@kab.ac.ug')) {
       throw new Error('Email must end with @kab.ac.ug');
     }
@@ -103,11 +119,9 @@ export const registerUser = async (payload) => {
 
 export const loginUser = async (payload) => {
   try {
-    // Try real API first
     const response = await axiosClient.post('/auth/login', payload);
     return response.data;
   } catch (apiError) {
-    // Fall back to mock data
     console.warn('Using mock login (API unavailable)', apiError.message);
     await delay();
 
@@ -139,11 +153,9 @@ export const loginUser = async (payload) => {
 
 export const getMe = async () => {
   try {
-    // Try real API first
     const response = await axiosClient.get('/auth/me');
     return response.data;
   } catch (apiError) {
-    // Fall back to stored user data
     console.warn('Using stored auth (API unavailable)', apiError.message);
     const stored = localStorage.getItem('kab_auth_user');
     if (!stored) throw new Error('Not authenticated');
@@ -155,11 +167,9 @@ export const getMe = async () => {
 
 export const refreshToken = async (refreshTokenValue) => {
   try {
-    // Try real API first
     const response = await axiosClient.post('/auth/refresh', { refresh_token: refreshTokenValue });
     return response.data;
   } catch (apiError) {
-    // Mock implementation: just return a new mock token
     console.warn('Using mock refresh token (API unavailable)', apiError.message);
     await delay();
     const mockUser = mockUsersDB.find((u) => u.refresh_token === refreshTokenValue);
@@ -177,14 +187,12 @@ export const refreshToken = async (refreshTokenValue) => {
 
 export const changePassword = async (payload) => {
   try {
-    // Try real API first
     const response = await axiosClient.post('/auth/change-password', payload);
     return response.data;
   } catch (apiError) {
-    // Fall back to mock validation
     console.warn('Using mock change password (API unavailable)', apiError.message);
     await delay();
-    
+
     if (!payload.current_password || !payload.new_password || !payload.confirm_password) {
       throw new Error('All fields are required.');
     }
@@ -194,7 +202,7 @@ export const changePassword = async (payload) => {
     if (payload.new_password.length < 8) {
       throw new Error('Password must be at least 8 characters.');
     }
-    
+
     return { success: true };
   }
 };
@@ -211,6 +219,15 @@ const initialGrantCalls = [
     deadline: '2026-12-31',
     academic_year: 2026,
     is_active: true,
+    application_window_open: '2026-01-01',
+    application_window_close: '2026-12-31',
+    eligibility_requirements: [
+      'Staff of Kabale University',
+      'Minimum 3 years teaching/research experience',
+      'Affiliated with recognized department',
+      'No pending projects',
+    ],
+    guidelines_file: null,
     created_at: '2026-01-15',
   },
   {
@@ -220,6 +237,14 @@ const initialGrantCalls = [
     deadline: '2026-11-30',
     academic_year: 2026,
     is_active: true,
+    application_window_open: '2026-02-01',
+    application_window_close: '2026-11-30',
+    eligibility_requirements: [
+      'Registered doctoral student or postdoc',
+      'Research aligned with NDP IV',
+      'Institutional approval required',
+    ],
+    guidelines_file: null,
     created_at: '2026-02-01',
   },
 ];
@@ -239,13 +264,12 @@ const saveGrantCalls = (calls) => {
   localStorage.setItem(GRANT_CALLS_KEY, JSON.stringify(calls));
 };
 
+// ✅ FIXED: was '/general/settings' which returned wrong data
 export const getGrantCalls = async () => {
   try {
-    // Try real API first
-    const response = await axiosClient.get('/general/settings');
+    const response = await axiosClient.get('/admin/grant-calls');
     return response.data;
   } catch (apiError) {
-    // Fall back to mock data
     console.warn('Using mock grant calls (API unavailable)', apiError.message);
     await delay(300);
     return getStoredGrantCalls();
@@ -254,11 +278,9 @@ export const getGrantCalls = async () => {
 
 export const createGrantCall = async (payload) => {
   try {
-    // Try real API first
     const response = await axiosClient.post('/admin/grant-calls', payload);
     return response.data;
   } catch (apiError) {
-    // Fall back to mock data
     console.warn('Using mock create grant call (API unavailable)', apiError.message);
     await delay();
     const calls = getStoredGrantCalls();
@@ -267,6 +289,10 @@ export const createGrantCall = async (payload) => {
       title: payload.title,
       description: payload.description,
       deadline: payload.deadline,
+      application_window_open: payload.application_window_open,
+      application_window_close: payload.application_window_close,
+      eligibility_requirements: payload.eligibility_requirements || [],
+      guidelines_file: payload.guidelines_file || null,
       academic_year: payload.academic_year || new Date().getFullYear(),
       is_active: true,
       created_at: new Date().toISOString().split('T')[0],
@@ -277,8 +303,86 @@ export const createGrantCall = async (payload) => {
   }
 };
 
+export const updateGrantCall = async (callId, payload) => {
+  try {
+    const response = await axiosClient.put(`/admin/grant-calls/${callId}`, payload);
+    return response.data;
+  } catch (apiError) {
+    console.warn('Using mock update grant call (API unavailable)', apiError.message);
+    await delay();
+    const calls = getStoredGrantCalls();
+    const updated = calls.map((c) =>
+      c.id === callId
+        ? {
+            ...c,
+            title: payload.title || c.title,
+            description: payload.description || c.description,
+            deadline: payload.deadline || c.deadline,
+            application_window_open: payload.application_window_open || c.application_window_open,
+            application_window_close: payload.application_window_close || c.application_window_close,
+            eligibility_requirements: payload.eligibility_requirements || c.eligibility_requirements,
+            guidelines_file: payload.guidelines_file !== undefined ? payload.guidelines_file : c.guidelines_file,
+            academic_year: payload.academic_year || c.academic_year,
+          }
+        : c
+    );
+    saveGrantCalls(updated);
+    return updated.find((c) => c.id === callId);
+  }
+};
+
+export const openApplicationWindow = async (callId) => {
+  try {
+    const response = await axiosClient.post(`/admin/grant-calls/${callId}/open-window`);
+    return response.data;
+  } catch (apiError) {
+    console.warn('Using mock open window (API unavailable)', apiError.message);
+    await delay();
+    const calls = getStoredGrantCalls();
+    const updated = calls.map((c) =>
+      c.id === callId ? { ...c, application_window_open: new Date().toISOString().split('T')[0] } : c
+    );
+    saveGrantCalls(updated);
+    return updated.find((c) => c.id === callId);
+  }
+};
+
+export const closeApplicationWindow = async (callId) => {
+  try {
+    const response = await axiosClient.post(`/admin/grant-calls/${callId}/close-window`);
+    return response.data;
+  } catch (apiError) {
+    console.warn('Using mock close window (API unavailable)', apiError.message);
+    await delay();
+    const calls = getStoredGrantCalls();
+    const updated = calls.map((c) =>
+      c.id === callId ? { ...c, application_window_close: new Date().toISOString().split('T')[0] } : c
+    );
+    saveGrantCalls(updated);
+    return updated.find((c) => c.id === callId);
+  }
+};
+
+export const getApplicationWindowStatus = async (callId) => {
+  await delay(200);
+  const calls = getStoredGrantCalls();
+  const call = calls.find((c) => c.id === callId);
+  if (!call) throw new Error('Grant call not found');
+
+  const now = new Date();
+  const openDate = new Date(call.application_window_open);
+  const closeDate = new Date(call.application_window_close);
+
+  return {
+    call_id: callId,
+    is_open: now >= openDate && now <= closeDate,
+    opens_at: call.application_window_open,
+    closes_at: call.application_window_close,
+    status: now < openDate ? 'pending' : now > closeDate ? 'closed' : 'open',
+  };
+};
+
 export const toggleGrantCall = async (callId) => {
-  // Replace with: await axiosClient.patch(`/admin/grant-calls/${callId}/toggle`);
   await delay();
   const calls = getStoredGrantCalls();
   const updated = calls.map((c) =>
@@ -289,7 +393,6 @@ export const toggleGrantCall = async (callId) => {
 };
 
 export const deleteGrantCall = async (callId) => {
-  // Replace with: await axiosClient.delete(`/admin/grant-calls/${callId}`);
   await delay();
   const calls = getStoredGrantCalls().filter((c) => c.id !== callId);
   saveGrantCalls(calls);
@@ -305,19 +408,17 @@ export const forgotPassword = async (payload) => {
   } catch (apiError) {
     console.warn('Using mock forgot password (API unavailable)', apiError.message);
     await delay();
-    
+
     const user = mockUsersDB.find((u) => u.email === payload.email);
     if (!user) {
-      // Still return success to prevent email enumeration attacks
       return { success: true, message: 'If email exists, OTP sent' };
     }
-    
-    // Mock: Generate and store OTP
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     localStorage.setItem(`otp_${payload.email}`, otp);
-    localStorage.setItem(`otp_expiry_${payload.email}`, Date.now() + 3600000); // 1 hour
+    localStorage.setItem(`otp_expiry_${payload.email}`, Date.now() + 3600000);
     console.log(`Mock OTP for ${payload.email}: ${otp}`);
-    
+
     return { success: true, message: 'OTP sent to your email' };
   }
 };
@@ -331,18 +432,17 @@ export const resetPassword = async (payload) => {
   } catch (apiError) {
     console.warn('Using mock reset password (API unavailable)', apiError.message);
     await delay();
-    
+
     if (payload.new_password !== payload.confirm_password) {
       throw new Error('Passwords do not match');
     }
     if (payload.new_password.length < 8) {
       throw new Error('Password must be at least 8 characters');
     }
-    
-    // Mock: Verify OTP
+
     const storedOtp = localStorage.getItem(`otp_${payload.email}`);
     const otpExpiry = localStorage.getItem(`otp_expiry_${payload.email}`);
-    
+
     if (!storedOtp || !otpExpiry) {
       throw new Error('OTP not found. Please request a new one.');
     }
@@ -352,11 +452,10 @@ export const resetPassword = async (payload) => {
     if (storedOtp !== payload.otp_code) {
       throw new Error('Invalid OTP. Please try again.');
     }
-    
-    // Clear OTP after successful reset
+
     localStorage.removeItem(`otp_${payload.email}`);
     localStorage.removeItem(`otp_expiry_${payload.email}`);
-    
+
     return { success: true, message: 'Password reset successful' };
   }
 };

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
+import { canAssignReviewers } from '../../../constants/permissions';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import PageHeader from '../../../components/layout/PageHeader';
 import Card from '../../../components/common/Card';
@@ -13,6 +15,9 @@ import { getSubmittedProposals, getReviewers, assignReviewers } from '../../../a
 
 export default function SubmittedProposals() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canAssign = canAssignReviewers(user?.role);
+  
   const [proposals, setProposals] = useState([]);
   const [reviewers, setReviewers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,12 +35,14 @@ export default function SubmittedProposals() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [proposalsData, reviewersData] = await Promise.all([
-          getSubmittedProposals(),
-          getReviewers(),
-        ]);
+        const proposalsData = await getSubmittedProposals();
         setProposals(proposalsData);
-        setReviewers(reviewersData);
+        
+        // Only fetch reviewers if user has permission to assign them
+        if (canAssign) {
+          const reviewersData = await getReviewers();
+          setReviewers(reviewersData);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -43,7 +50,7 @@ export default function SubmittedProposals() {
       }
     };
     fetchData();
-  }, []);
+  }, [canAssign]);
 
   const openAssignModal = (proposal) => {
     setSelectedProposal(proposal);
@@ -97,18 +104,20 @@ export default function SubmittedProposals() {
           <Button size="sm" variant="outline" onClick={() => navigate(`/admin/proposals/${row.id}`)}>
             View
           </Button>
-          <Button size="sm" variant="primary" onClick={() => openAssignModal(row)}>
-            Assign Reviewers
-          </Button>
+          {canAssign && (
+            <Button size="sm" variant="primary" onClick={() => openAssignModal(row)}>
+              Assign Reviewers
+            </Button>
+          )}
         </div>
       ),
     },
   ];
 
-  if (loading) return <DashboardLayout role="admin"><Loader /></DashboardLayout>;
+  if (loading) return <DashboardLayout role={user?.role}><Loader /></DashboardLayout>;
 
   return (
-    <DashboardLayout role="admin">
+    <DashboardLayout role={user?.role}>
       <PageHeader
         title="Submitted Proposals"
         subtitle={`${proposals.length} proposal${proposals.length !== 1 ? 's' : ''} awaiting reviewer assignment`}
@@ -129,7 +138,7 @@ export default function SubmittedProposals() {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={`Assign Reviewers — ${selectedProposal?.title}`}
+        title={`Assign Reviewers: ${selectedProposal?.title}`}
         size="lg"
       >
         <p className="text-sm text-muted mb-4">
