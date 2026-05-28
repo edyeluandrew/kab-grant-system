@@ -31,13 +31,13 @@ app = FastAPI(
 Manages the full lifecycle of research and innovation grant applications at Kabale University.
 
 ### User Roles
-- **Staff** — register with @kab.ac.ug email, submit proposals
-- **Reviewer** — created by admin, reviews assigned proposals
-- **Admin/SGO** — full system access, user management, decisions
+- **Staff** - register with @kab.ac.ug email, submit proposals
+- **Reviewer** - created by admin, reviews assigned proposals
+- **Admin/SGO** - full system access, user management, decisions
 
 ### Grant Types
-- **Research Projects** — full academic research proposals
-- **Innovation Grants** — concept-based innovation applications
+- **Research Projects** - full academic research proposals
+- **Innovation Grants** - concept-based innovation applications
 
 ### Flow
 1. Staff submits proposal → uploads attachments → auto-submitted
