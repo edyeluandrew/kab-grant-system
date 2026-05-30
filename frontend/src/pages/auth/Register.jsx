@@ -132,7 +132,7 @@ export default function Register() {
                     value={form.first_name}
                     onChange={handleChange}
                     placeholder="e.g. John"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   />
                 </div>
                 <div>
@@ -145,7 +145,7 @@ export default function Register() {
                     value={form.surname}
                     onChange={handleChange}
                     placeholder="e.g. Mugisha"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   />
                 </div>
                 <div>
@@ -158,7 +158,7 @@ export default function Register() {
                     value={form.other_name}
                     onChange={handleChange}
                     placeholder="Optional"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   />
                 </div>
                 <div>
@@ -169,7 +169,7 @@ export default function Register() {
                     name="gender"
                     value={form.gender}
                     onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   >
                     <option value="">Select gender</option>
                     {GENDER_OPTIONS.map((g) => (
@@ -187,7 +187,7 @@ export default function Register() {
                     value={form.phone}
                     onChange={handleChange}
                     placeholder="+256700000000"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   />
                 </div>
                 <div>
@@ -200,7 +200,7 @@ export default function Register() {
                     value={form.email}
                     onChange={handleChange}
                     placeholder="you@kab.ac.ug"
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   />
                   <p className="text-xs text-muted mt-1">Must be a @kab.ac.ug email address</p>
                 </div>
@@ -221,7 +221,7 @@ export default function Register() {
                     name="faculty_id"
                     value={form.faculty_id}
                     onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                    className="w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                   >
                     <option value="">Select faculty</option>
                     {faculties.map((f) => (
@@ -266,7 +266,7 @@ export default function Register() {
                       value={form.password}
                       onChange={handleChange}
                       placeholder="Min. 8 characters"
-                      className="w-full px-4 py-2.5 pr-11 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                      className="w-full px-4 py-2.5 pr-11 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                     />
                     <button
                       type="button"
@@ -288,7 +288,7 @@ export default function Register() {
                       value={form.confirm_password}
                       onChange={handleChange}
                       placeholder="Re-enter password"
-                      className="w-full px-4 py-2.5 pr-11 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:bg-white [rounded-lg bg-background text-textMain text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition">option]:text-gray-800"
+                      className="w-full px-4 py-2.5 pr-11 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:bg-white [rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition [&>option]:bg-white [&>option]:text-gray-800">option]:text-gray-800"
                     />
                     <button
                       type="button"
