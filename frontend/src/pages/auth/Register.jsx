@@ -2,34 +2,51 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerUser } from '../../api/authApi';
 import { getFaculties, getDepartments } from '../../api/referenceApi';
-import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-// Gender options as expected by backend enum
 const GENDER_OPTIONS = ['Male', 'Female'];
 
-// Enhanced select styling with better color contrast
 const selectStyle = `
-  select {
-    color-scheme: light;
+  select.kab-select {
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-color: #EEF6FC;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230078B8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 1.25rem;
+    background-position: right 0.85rem center;
+    background-size: 1rem;
     padding-right: 2.5rem;
+    border: 2px solid #B8D8EE;
+    color: #1a3a52;
+    transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
   }
-  select option {
+  select.kab-select:hover {
+    border-color: #0078B8;
+    background-color: #E0F0FA;
+  }
+  select.kab-select:focus {
+    border-color: #0078B8;
     background-color: #ffffff;
-    color: #1F2937;
-    padding: 0.5rem;
+    box-shadow: 0 0 0 3px rgba(0, 120, 184, 0.15);
+    outline: none;
   }
-  select option:hover {
-    background-color: #F3F4F6;
+  select.kab-select:disabled {
+    background-color: #F1F5F9;
+    color: #94A3B8;
+    border-color: #D9E2E7;
+    cursor: not-allowed;
+    opacity: 0.7;
   }
-  select option:checked {
-    background: linear-gradient(#0078B8, #0078B8);
+  select.kab-select option {
+    background-color: #ffffff;
+    color: #1a3a52;
+    padding: 8px 12px;
+  }
+  select.kab-select option:checked {
     background-color: #0078B8 !important;
-    color: white !important;
+    color: #ffffff !important;
+  }
+  select.kab-select option:hover {
+    background-color: #EEF6FC !important;
   }
 `;
 
@@ -38,7 +55,6 @@ export default function Register() {
   const [faculties, setFaculties] = useState([]);
   const [departments, setDepartments] = useState([]);
 
-  // All fields match POST /api/v1/auth/register body exactly
   const [form, setForm] = useState({
     first_name: '',
     surname: '',
@@ -57,6 +73,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     getFaculties().then(setFaculties).catch(() => {});
@@ -82,7 +99,6 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    // Client-side validation before hitting the API
     if (!form.first_name || !form.surname || !form.gender || !form.phone || !form.email) {
       setError('Please fill in all required fields.');
       return;
@@ -106,7 +122,6 @@ export default function Register() {
 
     setLoading(true);
     try {
-      // Sends exactly the shape expected by POST /api/v1/auth/register
       await registerUser(form);
       setSuccess(true);
       setTimeout(() => navigate('/login'), 2500);
@@ -126,15 +141,27 @@ export default function Register() {
 
   const inputClass =
     'w-full px-4 py-2.5 border border-border rounded-lg bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition';
+
   const selectClass =
-    'w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition cursor-pointer hover:border-gray-400';
+    'kab-select w-full px-4 py-2.5 rounded-lg text-sm font-medium cursor-pointer';
 
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#F4F4F4' }}>
         <style>{selectStyle}</style>
         <div className="text-center max-w-sm">
-          <img src="/log1.jpg" alt="KAB-FIR Logo" className="h-20 w-20 rounded-xl mx-auto mb-6" />
+          {!imageError ? (
+            <img
+              src="/log1.jpg"
+              alt="KAB-FIR Logo"
+              className="h-20 w-20 rounded-xl mx-auto mb-6"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="h-20 w-20 rounded-xl mx-auto mb-6 bg-primary/20 flex items-center justify-center text-primary font-bold text-xl">
+              K
+            </div>
+          )}
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
             style={{ backgroundColor: '#D4F4DD' }}
@@ -154,9 +181,21 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center px-6 py-12" style={{ backgroundColor: '#F4F4F4' }}>
       <style>{selectStyle}</style>
       <div className="w-full max-w-2xl">
+        {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src="/log1.jpg" alt="KAB-FIR Logo" className="h-16 w-16 rounded-lg" />
+            {!imageError ? (
+              <img
+                src="/log1.jpg"
+                alt="KAB-FIR Logo"
+                className="h-16 w-16 rounded-lg"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div className="h-16 w-16 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+                K
+              </div>
+            )}
             <div>
               <Link to="/" className="inline-block font-extrabold text-2xl tracking-tight" style={{ color: '#0078B8' }}>
                 KAB-FIR
@@ -170,6 +209,7 @@ export default function Register() {
           </p>
         </div>
 
+        {/* Error Alert */}
         {error && (
           <div
             className="mb-5 flex items-center gap-2 text-sm rounded-lg px-4 py-3"
@@ -185,13 +225,13 @@ export default function Register() {
 
             {/* Personal Information */}
             <div>
-              <h3 className="text-sm font-semibold text-textMain uppercase tracking-wide mb-4 pb-2 border-b border-border">
+              <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 pb-2 border-b border-border" style={{ color: '#4B5563' }}>
                 Personal Information
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    First Name <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    First Name <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
                   <input
                     type="text"
@@ -203,8 +243,8 @@ export default function Register() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Surname <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Surname <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
                   <input
                     type="text"
@@ -216,7 +256,7 @@ export default function Register() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">Other Name</label>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>Other Name</label>
                   <input
                     type="text"
                     name="other_name"
@@ -227,21 +267,19 @@ export default function Register() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Gender <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Gender <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
-                  <div className="relative">
-                    <select name="gender" value={form.gender} onChange={handleChange} className={selectClass}>
-                      <option value="">Select gender</option>
-                      {GENDER_OPTIONS.map((g) => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <select name="gender" value={form.gender} onChange={handleChange} className={selectClass}>
+                    <option value="">Select gender</option>
+                    {GENDER_OPTIONS.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Phone Number <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Phone Number <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
                   <input
                     type="tel"
@@ -253,8 +291,8 @@ export default function Register() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Email Address <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Email Address <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
                   <input
                     type="email"
@@ -265,61 +303,57 @@ export default function Register() {
                     autoComplete="email"
                     className={inputClass}
                   />
-                  <p className="text-xs text-muted mt-1">Must be a @kab.ac.ug email address</p>
+                  <p className="text-xs mt-1" style={{ color: '#7A8793' }}>Must be a @kab.ac.ug email address</p>
                 </div>
               </div>
             </div>
 
             {/* Academic Details */}
             <div>
-              <h3 className="text-sm font-semibold text-textMain uppercase tracking-wide mb-4 pb-2 border-b border-border">
+              <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 pb-2 border-b border-border" style={{ color: '#4B5563' }}>
                 Academic Details
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Faculty <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Faculty <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
-                  <div className="relative">
-                    <select name="faculty_id" value={form.faculty_id} onChange={handleChange} className={selectClass}>
-                      <option value="">Select faculty</option>
-                      {faculties.map((f) => (
-                        <option key={f.id} value={f.id}>{f.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <select name="faculty_id" value={form.faculty_id} onChange={handleChange} className={selectClass}>
+                    <option value="">Select faculty</option>
+                    {faculties.map((f) => (
+                      <option key={f.id} value={f.id}>{f.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Department <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Department <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      name="department_id"
-                      value={form.department_id}
-                      onChange={handleChange}
-                      disabled={!form.faculty_id}
-                      className={selectClass + (form.faculty_id ? '' : ' opacity-60 bg-gray-50 cursor-not-allowed border-gray-200')}
-                    >
-                      <option value="">{form.faculty_id ? 'Select department' : 'Select faculty first'}</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    name="department_id"
+                    value={form.department_id}
+                    onChange={handleChange}
+                    disabled={!form.faculty_id}
+                    className={selectClass}
+                  >
+                    <option value="">{form.faculty_id ? 'Select department' : 'Select faculty first'}</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
 
             {/* Password */}
             <div>
-              <h3 className="text-sm font-semibold text-textMain uppercase tracking-wide mb-4 pb-2 border-b border-border">
+              <h3 className="text-sm font-semibold uppercase tracking-wide mb-4 pb-2 border-b border-border" style={{ color: '#4B5563' }}>
                 Set Password
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Password <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Password <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -334,15 +368,16 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-textMain transition"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 transition"
+                      style={{ color: '#7A8793' }}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-textMain mb-1.5">
-                    Confirm Password <span className="text-danger">*</span>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: '#4B5563' }}>
+                    Confirm Password <span style={{ color: '#e53e3e' }}>*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -357,7 +392,8 @@ export default function Register() {
                     <button
                       type="button"
                       onClick={() => setShowConfirm((p) => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-textMain transition"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 transition"
+                      style={{ color: '#7A8793' }}
                     >
                       {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -369,7 +405,8 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ backgroundColor: '#0078B8' }}
             >
               {loading ? (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -381,12 +418,12 @@ export default function Register() {
           </form>
         </div>
 
-        <p className="text-center text-sm text-muted mt-6">
+        <p className="text-center text-sm mt-6" style={{ color: '#7A8793' }}>
           Already have an account?{' '}
-          <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link>
+          <Link to="/login" className="font-medium hover:underline" style={{ color: '#0078B8' }}>Sign in</Link>
         </p>
-        <p className="text-center text-sm text-muted mt-2">
-          <Link to="/" className="hover:underline">← Back to Home</Link>
+        <p className="text-center text-sm mt-2" style={{ color: '#7A8793' }}>
+          <Link to="/" className="hover:underline" style={{ color: '#0078B8' }}>← Back to Home</Link>
         </p>
       </div>
     </div>
