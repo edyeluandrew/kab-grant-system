@@ -29,12 +29,14 @@ export default function Login() {
     try {
       // POST /api/v1/auth/login → { access_token, refresh_token, token_type, user_id, role, must_change_password }
       const loginData = await loginUser({ email: form.email, password: form.password });
+      console.log('✅ Login successful, data:', loginData);
       
       // Store token first so getMe() can use it in Authorization header
       localStorage.setItem('authToken', loginData.access_token);
       
       // GET /api/v1/auth/me → { id, first_name, surname, other_name, gender, phone, email, role, faculty_id, department_id, is_active, created_at }
       const userData = await getMe();
+      console.log('✅ User data fetched:', userData);
       
       // Merge both responses
       const fullUserData = {
@@ -45,13 +47,23 @@ export default function Login() {
         must_change_password: loginData.must_change_password,
       };
       
+      console.log('✅ Full user data ready:', fullUserData);
+      console.log('📍 User role:', fullUserData.role);
+      
       login(fullUserData);
+      
+      const redirectPath = redirectPathForRole(fullUserData.role);
+      console.log('📍 Redirect path for role', fullUserData.role, ':', redirectPath);
+      
       if (loginData.must_change_password) {
+        console.log('⚠️ User must change password, redirecting to /change-password');
         navigate('/change-password', { replace: true });
       } else {
-        navigate(redirectPathForRole(loginData.role), { replace: true });
+        console.log('✅ Navigating to:', redirectPath);
+        navigate(redirectPath, { replace: true });
       }
     } catch (err) {
+      console.error('❌ Login error:', err);
       const detail = err.response?.data?.detail;
       if (typeof detail === 'string') {
         setError(detail);

@@ -81,18 +81,37 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    console.log('🔄 AdminDashboard mounting, user:', user);
     getAdminDashboard()
       .then((data) => {
-        console.log('Dashboard stats loaded:', data);
+        console.log('✅ Dashboard stats loaded:', data);
+        console.log('📊 Stats structure:', Object.keys(data));
         setStats(data);
+        setError(null);
       })
       .catch((err) => {
-        console.error('Dashboard API error:', err);
-        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load dashboard stats';
+        console.error('❌ Dashboard API error:', err);
+        console.error('📌 Error response:', err.response);
+        console.error('📝 Error message:', err.message);
+        
+        let errorMsg = 'Failed to load dashboard stats';
+        if (err.response?.data?.detail) {
+          errorMsg = err.response.data.detail;
+        } else if (err.response?.status === 403) {
+          errorMsg = 'You do not have permission to access the admin dashboard. Please contact an administrator.';
+        } else if (err.response?.status === 401) {
+          errorMsg = 'Your session has expired. Please log in again.';
+        } else if (err.message) {
+          errorMsg = err.message;
+        }
+        
         setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         setStats(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        console.log('✅ Dashboard loading complete');
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return <DashboardLayout role="admin"><Loader /></DashboardLayout>;

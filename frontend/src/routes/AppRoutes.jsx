@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { ROLES } from '../constants/roles';
 import DashboardLayout from '../components/layout/DashboardLayout';
 
@@ -58,9 +59,11 @@ const SubmittedReviews = lazy(() => import('../pages/reviewer/SubmittedReviews')
 const ReviewerNotifications = lazy(() => import('../pages/reviewer/ReviewerNotifications'));
 
 const LazyWrapper = ({ component: Component, role = 'applicant' }) => (
-  <Suspense fallback={<LoadingFallback role={role} />}>
-    <Component />
-  </Suspense>
+  <ErrorBoundary role={role}>
+    <Suspense fallback={<LoadingFallback role={role} />}>
+      <Component />
+    </Suspense>
+  </ErrorBoundary>
 );
 
 export default function AppRoutes() {
