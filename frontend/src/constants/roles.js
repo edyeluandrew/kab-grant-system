@@ -4,7 +4,7 @@
  */
 
 export const ROLES = {
-  SUPER_ADMIN: 'super_admin',
+  SUPER_ADMIN: 'admin',
   SGO_ADMIN: 'sgo_admin',
   REVIEWER: 'reviewer',
   STAFF: 'staff',
