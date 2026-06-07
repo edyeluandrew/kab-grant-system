@@ -1,38 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getGrantCalls } from "../../api/adminApi";
+import { getGrantCalls } from '../../api/adminApi';
 import {
-  Megaphone,
   CalendarDays,
   ArrowRight,
   ChevronRight,
-  Clock,
+  DollarSign,
+  Tag,
+  SearchX,
 } from 'lucide-react';
 
-const announcements = [
-  {
-    id: 1,
-    title: 'KAB-FIR Portal Now Live',
-    body: 'The Kabale University Fund for Innovation and Research portal is now open for proposal submissions. All eligible staff are encouraged to apply.',
-    date: '2026-05-01',
-    type: 'info',
-  },
-  {
-    id: 2,
-    title: 'Submission Deadline Reminder',
-    body: 'The deadline for Innovation Grant 2026 proposals is 31 December 2026. Ensure all required documents are uploaded before submission.',
-    date: '2026-05-10',
-    type: 'warning',
-  },
-  {
-    id: 3,
-    title: 'Research Ethics Training',
-    body: 'Mandatory research ethics training scheduled for 15 June 2026. All principal investigators must attend before submitting proposals.',
-    date: '2026-05-12',
-    type: 'info',
-  },
-];
+const STATUS_CONFIG = {
+  Open: { bg: 'bg-success/20', text: 'text-success', label: '✓ Open for Applications' },
+  Draft: { bg: 'bg-warning/20', text: 'text-warning', label: 'Coming Soon' },
+  Closed: { bg: 'bg-danger/20', text: 'text-danger', label: 'Closed' },
+};
+
+function daysLeft(dateStr) {
+  if (!dateStr) return null;
+  const diff = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
+  if (diff <= 0) return 'Deadline passed';
+  return `${diff} days left`;
+}
 
 export default function Landing() {
   const { isAuthenticated, user, redirectPathForRole, loading: authLoading } = useAuth();
@@ -41,20 +31,13 @@ export default function Landing() {
 
   useEffect(() => {
     getGrantCalls()
-      .then((data) => setGrantCalls(data.filter((c) => c.is_active)))
+      .then((data) => setGrantCalls(data.filter((c) => c.status === 'Open')))
       .catch(() => setGrantCalls([]))
       .finally(() => setLoadingCalls(false));
   }, []);
 
-  const daysLeft = (deadline) => {
-    const diff = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? `${diff} days left` : 'Deadline passed';
-  };
-
-  // Determine nav buttons — wait for auth to resolve first to prevent flicker
   const renderNavButtons = () => {
     if (authLoading) return null;
-
     if (isAuthenticated && user) {
       return (
         <Link
@@ -65,7 +48,6 @@ export default function Landing() {
         </Link>
       );
     }
-
     return (
       <>
         <Link
@@ -97,9 +79,7 @@ export default function Landing() {
               <span className="block text-xs text-muted">Fund for Innovation & Research</span>
             </div>
           </div>
-          <nav className="flex items-center gap-3">
-            {renderNavButtons()}
-          </nav>
+          <nav className="flex items-center gap-3">{renderNavButtons()}</nav>
         </div>
       </header>
 
@@ -114,8 +94,6 @@ export default function Landing() {
             Supporting research excellence and innovation at Kabale University. Submit your
             proposals, track progress, and receive funding all in one place.
           </p>
-
-          {/* Hero CTA — only show when auth resolved AND not logged in */}
           {!authLoading && !isAuthenticated && (
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link
@@ -135,144 +113,106 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Main content: Grant Calls + Announcements */}
-      <section className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-        {/* Active Grant Calls */}
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-2 mb-6">
-            <CalendarDays className="w-5 h-5 text-primary" />
-            <h2 className="text-xl font-bold text-textMain">Active Grant Calls</h2>
-          </div>
-
-          {loadingCalls ? (
-            <div className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-32 bg-surface rounded-xl animate-pulse" />
-              ))}
-            </div>
-          ) : grantCalls.length === 0 ? (
-            <div className="bg-surface border border-border rounded-xl p-8 text-center text-muted">
-              No active grant calls at the moment. Check back soon.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {grantCalls.map((call) => {
-                const now = new Date();
-                const appOpen = call.application_window_open ? new Date(call.application_window_open) : null;
-                const appClose = call.application_window_close ? new Date(call.application_window_close) : null;
-                const isWindowOpen = appOpen && appClose && now >= appOpen && now <= appClose;
-                const windowStatus = !appOpen ? 'unknown' : now < appOpen ? 'pending' : now > appClose ? 'closed' : 'open';
-                
-                return (
-                  <div
-                    key={call.id}
-                    className="bg-surface border border-border rounded-xl p-6 hover:border-primary transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-textMain text-lg">{call.title}</h3>
-                          <span
-                            className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                              isWindowOpen
-                                ? 'bg-success/20 text-success'
-                                : windowStatus === 'closed'
-                                ? 'bg-danger/20 text-danger'
-                                : 'bg-warning/20 text-warning'
-                            }`}
-                          >
-                            {isWindowOpen ? '✓ Open for Applications' : windowStatus === 'closed' ? 'Closed' : 'Coming Soon'}
-                          </span>
-                        </div>
-                        <p className="text-muted text-sm leading-relaxed mb-4">{call.description}</p>
-                        
-                        {/* Key Info */}
-                        <div className="grid grid-cols-2 gap-4 mb-4 py-3 border-t border-b border-border/40">
-                          <div>
-                            <p className="text-xs text-muted mb-1">Submission Deadline</p>
-                            <p className="text-sm font-semibold text-textMain">{call.deadline}</p>
-                            <p className="text-xs text-warning mt-0.5">{daysLeft(call.deadline)} days left</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted mb-1">Application Window</p>
-                            <p className="text-xs text-textMain font-mono">
-                              {call.application_window_open} to {call.application_window_close}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Eligibility Preview */}
-                        {call.eligibility_requirements && call.eligibility_requirements.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-textMain mb-2">Key Requirements:</p>
-                            <ul className="space-y-1">
-                              {call.eligibility_requirements.slice(0, 2).map((req, idx) => (
-                                <li key={idx} className="text-xs text-muted flex items-start gap-2">
-                                  <span className="text-success mt-0.5">✓</span>
-                                  {req}
-                                </li>
-                              ))}
-                              {call.eligibility_requirements.length > 2 && (
-                                <li className="text-xs text-muted italic pt-1">
-                                  +{call.eligibility_requirements.length - 2} more requirements
-                                </li>
-                              )}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="inline-block bg-success/10 text-success text-xs font-semibold px-3 py-1 rounded-full mb-3">
-                          {daysLeft(call.deadline)} days
-                        </span>
-                        {!authLoading && !isAuthenticated && (
-                          <div>
-                            <Link
-                              to="/register"
-                              className="flex items-center gap-1 text-primary text-xs font-medium hover:underline"
-                            >
-                              Apply Now <ChevronRight className="w-3.5 h-3.5" />
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* Grant Calls */}
+      <section className="max-w-6xl mx-auto px-6 py-12">
+        <div className="flex items-center gap-2 mb-8">
+          <CalendarDays className="w-5 h-5 text-primary" />
+          <h2 className="text-2xl font-bold text-textMain">Active Grant Calls</h2>
         </div>
 
-        {/* Announcements */}
-        <div>
-          <div className="flex items-center gap-2 mb-6">
-            <Megaphone className="w-5 h-5 text-primary" />
-            <h2 className="text-xl font-bold text-textMain">Announcements</h2>
-          </div>
-          <div className="space-y-4">
-            {announcements.map((a) => (
-              <div
-                key={a.id}
-                className={`bg-surface border rounded-xl p-4 ${
-                  a.type === 'warning' ? 'border-warning/40' : 'border-border'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  {a.type === 'warning' ? (
-                    <span className="w-2 h-2 rounded-full bg-warning shrink-0" />
-                  ) : (
-                    <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                  )}
-                  <p className="font-semibold text-sm text-textMain">{a.title}</p>
-                </div>
-                <p className="text-xs text-muted leading-relaxed mb-2">{a.body}</p>
-                <p className="text-xs text-muted/60">{a.date}</p>
-              </div>
+        {loadingCalls ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-48 bg-surface rounded-xl animate-pulse" />
             ))}
           </div>
-        </div>
+        ) : grantCalls.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl py-16 flex flex-col items-center justify-center text-center gap-3">
+            <SearchX className="w-10 h-10 text-muted" />
+            <p className="text-textMain font-semibold text-lg">No Active Grant Calls</p>
+            <p className="text-muted text-sm max-w-sm">
+              There are no open grant calls at the moment. Please check back later or create an account to get notified.
+            </p>
+            {!authLoading && !isAuthenticated && (
+              <Link
+                to="/register"
+                className="mt-2 inline-flex items-center gap-2 bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:opacity-90 transition"
+              >
+                Create Account <ArrowRight className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {grantCalls.map((call) => {
+              const statusCfg = STATUS_CONFIG[call.status] || STATUS_CONFIG.Draft;
+              const closing = daysLeft(call.closing_date);
+
+              return (
+                <div
+                  key={call.id}
+                  className="bg-surface border border-border rounded-xl p-6 hover:border-primary transition-colors flex flex-col"
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <h3 className="font-bold text-textMain text-lg leading-snug flex-1">{call.title}</h3>
+                    <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>
+                      {statusCfg.label}
+                    </span>
+                  </div>
+
+                  {/* Meta */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="flex items-center gap-1 text-xs text-muted">
+                      <Tag className="w-3 h-3" /> {call.grant_type}
+                    </span>
+                    <span className="text-xs text-muted">AY {call.academic_year}</span>
+                  </div>
+
+                  <p className="text-muted text-sm leading-relaxed mb-5 flex-1">{call.description}</p>
+
+                  {/* Info grid */}
+                  <div className="grid grid-cols-3 gap-3 py-4 border-t border-b border-border/50 mb-5">
+                    <div>
+                      <p className="text-xs text-muted mb-1">Opens</p>
+                      <p className="text-sm font-semibold text-textMain">{call.opening_date}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted mb-1">Closes</p>
+                      <p className="text-sm font-semibold text-textMain">{call.closing_date}</p>
+                      {closing && <p className="text-xs text-warning mt-0.5">{closing}</p>}
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted mb-1">Max Budget</p>
+                      <p className="text-sm font-semibold text-textMain flex items-center gap-0.5">
+                        <DollarSign className="w-3 h-3" />
+                        {call.max_budget ? Number(call.max_budget).toLocaleString() : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  {!authLoading && !isAuthenticated && (
+                    <Link
+                      to="/register"
+                      className="inline-flex items-center gap-1 text-primary text-sm font-medium hover:underline"
+                    >
+                      Apply Now <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  )}
+                  {!authLoading && isAuthenticated && (
+                    <Link
+                      to={redirectPathForRole(user.role)}
+                      className="inline-flex items-center gap-1 text-primary text-sm font-medium hover:underline"
+                    >
+                      Go to Dashboard <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Footer */}
