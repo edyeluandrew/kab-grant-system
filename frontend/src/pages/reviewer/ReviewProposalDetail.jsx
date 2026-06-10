@@ -7,7 +7,8 @@ import {
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import Loader from '../../components/common/Loader';
 import Alert from '../../components/common/Alert';
-import { getAssignedProposalDetail, submitReview } from '../../api/reviewerApi';
+import { getAssignedProposalDetail, submitReview, cacheProposalForReview } from '../../api/reviewerApi';
+import { getApiError } from '../../utils/apiError';
 import { useAuth } from '../../context/AuthContext';
 import { downloadFile } from '../../utils/downloadUtils';
 
@@ -30,7 +31,7 @@ export default function ReviewProposalDetail() {
   useEffect(() => {
     getAssignedProposalDetail(id)
       .then(setProposal)
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(getApiError(err, 'Failed to load proposal')))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -44,10 +45,17 @@ export default function ReviewProposalDetail() {
     setSubmitError('');
     try {
       await submitReview(Number(id), form);
+      if (proposal) {
+        cacheProposalForReview(Number(id), {
+          protocol_no: proposal.protocol_no,
+          proposal_title: proposal.title,
+          grant_type: proposal.grant_type,
+        });
+      }
       setSubmitSuccess(true);
       setProposal((prev) => ({ ...prev, review_submitted: true }));
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(getApiError(err, 'Failed to submit review'));
     } finally {
       setSubmitting(false);
     }

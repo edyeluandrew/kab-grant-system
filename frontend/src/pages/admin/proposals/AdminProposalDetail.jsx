@@ -111,7 +111,7 @@ export default function AdminProposalDetail() {
             <InfoRow label="Department" value={proposal.pi_department} />
             <InfoRow label="Qualification" value={proposal.pi_qualification} />
             <InfoRow label="Designation" value={proposal.pi_designation} />
-            <InfoRow label="Submitted On" value={proposal.created_at} />
+            <InfoRow label="Submitted On" value={proposal.submitted_at || proposal.admin_decision_at || proposal.created_at} />
           </div>
         </Card>
 
@@ -127,7 +127,7 @@ export default function AdminProposalDetail() {
             <SectionBlock title="Specific Objectives" content={proposal.specific_objectives} />
             <SectionBlock title="Methods Description" content={proposal.methods_description} />
             <SectionBlock title="Outcomes / Impact / Outreach" content={proposal.outcomes} />
-            <SectionBlock title="Translation / Dissemination Plan" content={proposal.dissemination} />
+            <SectionBlock title="Translation / Dissemination Plan" content={proposal.dissemination_plan || proposal.dissemination} />
             <SectionBlock title="Potential Policy Impact" content={proposal.policy_impact} />
             <SectionBlock title="Scalability" content={proposal.scalability} />
             <SectionBlock title="Sustainability" content={proposal.sustainability} />

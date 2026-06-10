@@ -5,25 +5,37 @@ import PageHeader from '../../components/layout/PageHeader';
 import Loader from '../../components/common/Loader';
 import Alert from '../../components/common/Alert';
 import { getSubmittedReviews } from '../../api/reviewerApi';
-import { useAuth } from '../../context/AuthContext';
+import { getReviewMetaList } from '../../utils/reviewerUtils';
+import { getApiError } from '../../utils/apiError';
 
 const recColor = {
-  'Approve': 'bg-green-50 text-green-700',
+  Approve: 'bg-green-50 text-green-700',
   'Minor Revisions': 'bg-blue-50 text-blue-700',
   'Major Revisions': 'bg-amber-50 text-amber-700',
-  'Reject': 'bg-red-50 text-red-700',
+  Reject: 'bg-red-50 text-red-700',
 };
 
 export default function SubmittedReviews() {
-  const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     getSubmittedReviews()
-      .then(setReviews)
-      .catch((err) => setError(err.message))
+      .then((data) => {
+        const metaList = getReviewMetaList();
+        const enriched = (data || []).map((review, index) => {
+          const meta = metaList[index] || {};
+          return {
+            ...review,
+            protocol_no: meta.protocol_no,
+            proposal_title: meta.proposal_title,
+            grant_type: meta.grant_type,
+          };
+        });
+        setReviews(enriched);
+      })
+      .catch((err) => setError(getApiError(err, 'Failed to load reviews')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -49,22 +61,31 @@ export default function SubmittedReviews() {
             <div key={r.id} className="bg-surface border border-border rounded-xl p-5">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex-1 min-w-0">
-                  <p className="font-mono text-xs text-muted mb-1">{r.protocol_no}</p>
-                  <h3 className="font-semibold text-textMain mb-1">{r.proposal_title}</h3>
+                  {r.protocol_no && (
+                    <p className="font-mono text-xs text-muted mb-1">{r.protocol_no}</p>
+                  )}
+                  <h3 className="font-semibold text-textMain mb-1">
+                    {r.proposal_title || `Review #${r.id}`}
+                  </h3>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      r.grant_type === 'Research'
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'bg-violet-50 text-violet-600'
-                    }`}>
-                      {r.grant_type}
-                    </span>
+                    {r.grant_type && (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        r.grant_type === 'Research'
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'bg-violet-50 text-violet-600'
+                      }`}>
+                        {r.grant_type}
+                      </span>
+                    )}
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${recColor[r.recommendation] || 'bg-gray-50 text-gray-600'}`}>
                       {r.recommendation}
                     </span>
+                    {r.score != null && (
+                      <span className="text-xs text-muted">Score: {r.score}/10</span>
+                    )}
                   </div>
                   {r.comments && (
-                    <p className="text-sm text-muted mt-3 leading-relaxed line-clamp-2">{r.comments}</p>
+                    <p className="text-sm text-muted mt-3 leading-relaxed line-clamp-3">{r.comments}</p>
                   )}
                 </div>
                 <div className="text-right shrink-0">

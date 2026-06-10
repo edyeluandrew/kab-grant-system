@@ -1,4 +1,10 @@
 import axiosClient from './axiosClient';
+import {
+  getSubmittedProposalIds,
+  markProposalReviewSubmitted,
+  saveReviewSnapshot,
+  pushReviewMeta,
+} from '../utils/reviewerUtils';
 
 // ─── Assigned Proposals ────────────────────────────────────────────────────────
 
@@ -9,7 +15,11 @@ import axiosClient from './axiosClient';
  */
 export const getAssignedProposals = async () => {
   const response = await axiosClient.get('/reviewer/proposals');
-  return response.data;
+  const submittedIds = new Set(getSubmittedProposalIds());
+  return (response.data || []).map((p) => ({
+    ...p,
+    review_submitted: submittedIds.has(p.id),
+  }));
 };
 
 /**
@@ -18,7 +28,11 @@ export const getAssignedProposals = async () => {
  */
 export const getAssignedProposalDetail = async (proposalId) => {
   const response = await axiosClient.get(`/reviewer/proposals/${proposalId}`);
-  return response.data;
+  const submittedIds = new Set(getSubmittedProposalIds());
+  return {
+    ...response.data,
+    review_submitted: submittedIds.has(Number(proposalId)),
+  };
 };
 
 // ─── Review Submission ────────────────────────────────────────────────────────
@@ -47,10 +61,14 @@ export const submitReview = async (proposalId, payload) => {
     formData.append('report_file', payload.report_file);
   }
 
-  const response = await axiosClient.post(`/reviewer/proposals/${proposalId}/review`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await axiosClient.post(`/reviewer/proposals/${proposalId}/review`, formData);
+  markProposalReviewSubmitted(proposalId);
   return response.data;
+};
+
+/** Persist proposal metadata for submitted reviews list (API omits proposal_id). */
+export const cacheProposalForReview = (proposalId, snapshot) => {
+  saveReviewSnapshot(proposalId, snapshot);
 };
 
 // ─── My Reviews ───────────────────────────────────────────────────────────────
@@ -81,7 +99,7 @@ export const getReviewerDashboardStats = async () => {
       getMyReviews(),
     ]);
 
-    const submittedProposalIds = new Set(submittedReviews?.map((r) => r.proposal_id) || []);
+    const submittedProposalIds = new Set(getSubmittedProposalIds());
     const pendingCount = (assignedProposals || []).filter(
       (p) => !submittedProposalIds.has(p.id)
     ).length;
