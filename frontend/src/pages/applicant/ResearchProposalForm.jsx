@@ -177,13 +177,14 @@ export default function ResearchProposalForm({ isEdit = false }) {
         const [facultiesData, disciplinesData, grantCallsData] = await Promise.all([
           getFaculties(),
           getResearchDisciplines(),
-          getGrantCalls('Research'),
+          getGrantCalls(),
         ]);
         setFaculties(facultiesData);
         setDisciplines(disciplinesData);
-        setGrantCalls(grantCallsData);
-        if (grantCallsData.length === 0) {
-          console.warn('No open grant calls returned. Admin must open a grant call before applicants can select one.');
+        setGrantCalls(grantCallsData || []);
+        console.log('[ResearchProposalForm] grant calls loaded:', grantCallsData);
+        if (!grantCallsData?.length) {
+          console.warn('No open grant calls available for dropdown.');
         }
       } catch (err) {
         console.error('Error loading dropdown data:', err);

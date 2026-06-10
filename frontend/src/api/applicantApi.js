@@ -41,9 +41,10 @@ export const getApplicantDashboard = async () => {
  * Returns array of grant calls with title, description, deadline, etc.
  */
 export const getAvailableGrantCalls = async () => {
-  const response = await axiosClient.get('/admin/grant-calls');
-  const calls = Array.isArray(response.data) ? response.data : [];
-  return calls.filter((call) => call.status === 'Open');
+  const { getOpenGrantCallsForLanding } = await import('./grantCallsApi');
+  const calls = await getOpenGrantCallsForLanding();
+  console.log('[GrantCalls] getAvailableGrantCalls:', calls);
+  return calls;
 };
 
 /**

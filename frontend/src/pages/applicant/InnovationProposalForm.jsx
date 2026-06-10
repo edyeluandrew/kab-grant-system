@@ -107,8 +107,12 @@ export default function InnovationProposalForm({ isEdit = false }) {
     const loadDropdownData = async () => {
       try {
         setLoadingDropdowns(true);
-        const grantCallsData = await getGrantCalls('Innovation');
-        setGrantCalls(grantCallsData);
+        const grantCallsData = await getGrantCalls();
+        setGrantCalls(grantCallsData || []);
+        console.log('[InnovationProposalForm] grant calls loaded:', grantCallsData);
+        if (!grantCallsData?.length) {
+          console.warn('No open grant calls available for dropdown.');
+        }
       } catch (err) {
         console.error('Error loading dropdown data:', err);
         setError(err.message || 'Failed to load grant calls. Please refresh or contact the administrator.');
@@ -324,7 +328,9 @@ export default function InnovationProposalForm({ isEdit = false }) {
 
   // PREVIEW MODE - Show editable overview
   if (showPreview) {
-    const grantCallName = grantCalls.find(gc => gc.id == formData.grantCall)?.label || 'N/A';
+    const grantCallName = grantCalls.find(
+      (gc) => (gc.value || String(gc.id)) === String(formData.grantCall)
+    )?.label || 'N/A';
 
     return (
       <DashboardLayout role="applicant">
@@ -424,7 +430,11 @@ export default function InnovationProposalForm({ isEdit = false }) {
               className={`w-full p-2 border rounded ${errors.grantCall ? 'border-red-500' : 'border-gray-300'}`}
             >
               <option value="">Select grant call</option>
-              {grantCalls.map(gc => <option key={gc.id} value={gc.id}>{gc.label}</option>)}
+              {grantCalls.map((gc) => (
+                <option key={gc.value || gc.id} value={gc.value || String(gc.id)}>
+                  {gc.label || gc.title}
+                </option>
+              ))}
             </select>
             {errors.grantCall && <p className="text-red-600 text-sm mt-1">{errors.grantCall}</p>}
           </div>

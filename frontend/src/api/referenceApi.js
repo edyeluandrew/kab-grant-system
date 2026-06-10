@@ -1,5 +1,5 @@
 import axiosClient from './axiosClient';
-import { getOpenGrantCallsForDropdown } from './grantCallsApi';
+import { getOpenGrantCallsForProposalForm } from './grantCallsApi';
 
 // ─── Faculties ────────────────────────────────────────────────────────────────
 
@@ -93,10 +93,10 @@ export async function getInnovationSpecializations() {
 // ─── Grant Calls ──────────────────────────────────────────────────────────────
 
 /**
- * Get open grant calls for proposal form dropdowns (requires logged-in staff/applicant).
- * GET /api/v1/admin/grant-calls
- * @param {string|null} grantType - Optional filter: "Research" | "Innovation"
+ * Get open grant calls for proposal form dropdowns.
+ * Uses the same fetch path as the landing page (token + cache fallback).
+ * @param {string|null} grantType - Optional client-side filter: "Research" | "Innovation"
  */
 export async function getGrantCalls(grantType = null) {
-  return getOpenGrantCallsForDropdown(grantType);
+  return getOpenGrantCallsForProposalForm(grantType);
 }

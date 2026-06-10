@@ -110,11 +110,12 @@ export default function SubmitProposal() {
         const [facultiesData, disciplinesData, grantCallsData] = await Promise.all([
           getFaculties(),
           getResearchDisciplines(),
-          getGrantCalls('Research'),
+          getGrantCalls(),
         ]);
         setFaculties(facultiesData);
         setDisciplines(disciplinesData);
-        setGrantCalls(grantCallsData);
+        setGrantCalls(grantCallsData || []);
+        console.log('[SubmitProposal] grant calls loaded:', grantCallsData);
       } catch (err) {
         console.error('Error loading dropdown data:', err);
       } finally {

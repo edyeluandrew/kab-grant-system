@@ -43,17 +43,22 @@ export async function fetchGrantCalls({ token = null } = {}) {
   return Array.isArray(data) ? data : [];
 }
 
-/** Open grant calls only, shaped for dropdowns. Requires authenticated staff/applicant. */
-export async function getOpenGrantCallsForDropdown(grantType = null) {
-  const calls = await fetchGrantCalls();
-  return calls
+function normalizeGrantType(type) {
+  return String(type || '').trim().toLowerCase();
+}
+
+/** Map raw API grant calls to `{ value, label, id }` dropdown options. */
+export function mapGrantCallsToDropdownOptions(calls, grantType = null) {
+  const typeFilter = grantType ? normalizeGrantType(grantType) : null;
+
+  return (calls || [])
     .filter((call) => call.status === 'Open')
-    .filter((call) => !grantType || call.grant_type === grantType)
+    .filter((call) => !typeFilter || normalizeGrantType(call.grant_type) === typeFilter)
     .map((call) => ({
       id: call.id,
-      value: call.id,
+      value: String(call.id),
       title: call.title,
-      label: `${call.title} (Closes: ${call.closing_date})`,
+      label: `${call.title} (${call.grant_type || 'Grant'} · Closes: ${call.closing_date || 'TBD'})`,
       grant_type: call.grant_type,
       status: call.status,
       description: call.description,
@@ -62,6 +67,25 @@ export async function getOpenGrantCallsForDropdown(grantType = null) {
       academic_year: call.academic_year,
       max_budget: call.max_budget,
     }));
+}
+
+/**
+ * Proposal form dropdown — same fetch path as the landing page
+ * (public token → session token → cache fallback), then map to options.
+ */
+export async function getOpenGrantCallsForProposalForm(grantType = null) {
+  const rawCalls = await getOpenGrantCallsForLanding();
+  console.log('[GrantCalls] raw open calls for proposal form:', rawCalls);
+
+  const options = mapGrantCallsToDropdownOptions(rawCalls, grantType);
+  console.log('[GrantCalls] proposal dropdown options:', options);
+
+  return options;
+}
+
+/** @deprecated Use getOpenGrantCallsForProposalForm */
+export async function getOpenGrantCallsForDropdown(grantType = null) {
+  return getOpenGrantCallsForProposalForm(grantType);
 }
 
 /**
