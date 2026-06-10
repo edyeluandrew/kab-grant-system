@@ -92,23 +92,21 @@ export async function getInnovationSpecializations() {
 // ─── Grant Calls ──────────────────────────────────────────────────────────────
 
 /**
- * Get all Open grant calls for proposal forms.
+ * Get open grant calls for proposal form dropdowns.
  * GET /api/v1/admin/grant-calls
- * Filters to only Open calls.
- * Returns: { id, value, label } — ready for dropdown rendering
+ * @param {string|null} grantType - Optional filter: "Research" | "Innovation"
+ * Returns: { id, value, label, title, grant_type } — ready for dropdown rendering
  */
-export async function getGrantCalls() {
-  try {
-    const response = await axiosClient.get('/admin/grant-calls');
-    return response.data
-      .filter((call) => call.status === 'Open')
-      .map((call) => ({
-        id: call.id,
-        value: call.id,
-        label: `${call.title} (Closes: ${call.closing_date})`,
-      }));
-  } catch (error) {
-    console.warn('getGrantCalls: Failed to fetch grant calls', error);
-    return [];
-  }
+export async function getGrantCalls(grantType = null) {
+  const response = await axiosClient.get('/admin/grant-calls');
+  return response.data
+    .filter((call) => call.status === 'Open')
+    .filter((call) => !grantType || call.grant_type === grantType)
+    .map((call) => ({
+      id: call.id,
+      value: call.id,
+      title: call.title,
+      label: `${call.title} (Closes: ${call.closing_date})`,
+      grant_type: call.grant_type,
+    }));
 }

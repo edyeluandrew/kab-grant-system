@@ -198,7 +198,7 @@ export default function ResearchProposalForm({ isEdit = false }) {
         const [facultiesData, disciplinesData, grantCallsData] = await Promise.all([
           getFaculties(),
           getResearchDisciplines(),
-          getGrantCalls(),
+          getGrantCalls('Research'),
         ]);
         setFaculties(facultiesData);
         setDisciplines(disciplinesData);

@@ -8,7 +8,7 @@ import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
 import { createProposalDraft, submitProposal } from '../../api/applicantApi';
-import { getGrantCalls } from "../../api/adminApi";
+import { getGrantCalls } from '../../api/referenceApi';
 import { getFaculties, getDepartments, getResearchDisciplines } from '../../api/referenceApi';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 import {
@@ -111,7 +111,7 @@ export default function SubmitProposal() {
         const [facultiesData, disciplinesData, grantCallsData] = await Promise.all([
           getFaculties(),
           getResearchDisciplines(),
-          getGrantCalls(),
+          getGrantCalls('Research'),
         ]);
         setFaculties(facultiesData);
         setDisciplines(disciplinesData);
