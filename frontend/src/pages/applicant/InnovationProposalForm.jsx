@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Save, Eye, CheckCircle2, ArrowLeft } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
@@ -11,6 +11,7 @@ import { createProposalDraft, updateProposalDraft, getProposalDetails } from '..
 import { getMe } from '../../api/authApi';
 import { getGrantCalls, getDepartments } from '../../api/referenceApi';
 import { mapApiToInnovationForm } from '../../utils/proposalMapper';
+import { getApiError } from '../../utils/apiError';
 import { createAutosaveManager } from '../../utils/autosave';
 import { countWords } from '../../utils/validations';
 
@@ -54,9 +55,11 @@ const FILE_LIMITS = {
 
 export default function InnovationProposalForm({ isEdit = false }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { id: proposalId } = useParams();
+  const isEditMode = isEdit || pathname.includes('/edit/');
   const autosaveManagerRef = useRef(null);
-  const [loading, setLoading] = useState(isEdit ? true : false);
+  const [loading, setLoading] = useState(isEditMode && proposalId ? true : false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
@@ -88,12 +91,12 @@ export default function InnovationProposalForm({ isEdit = false }) {
   const [formData, setFormData] = useState(defaultFormData);
 
   useEffect(() => {
-    const autosaveKey = isEdit && proposalId 
+    const autosaveKey = isEditMode && proposalId 
       ? `kab_innovation_proposal_edit_${proposalId}`
       : 'kab_innovation_proposal_draft';
     autosaveManagerRef.current = createAutosaveManager(autosaveKey, defaultFormData);
 
-    if (isEdit && proposalId) {
+    if (isEditMode && proposalId) {
       const loadProposalData = async () => {
         try {
           const proposal = await getProposalDetails(proposalId);
@@ -130,7 +133,7 @@ export default function InnovationProposalForm({ isEdit = false }) {
     };
 
     loadDropdownData();
-  }, [isEdit, proposalId]);
+  }, [isEditMode, proposalId]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
@@ -239,19 +242,24 @@ export default function InnovationProposalForm({ isEdit = false }) {
       setError(null);
       const mapperOptions = await getInnovationMapperOptions();
 
-      if (isEdit && proposalId) {
+      let savedId = proposalId;
+      if (isEditMode && proposalId) {
         await updateProposalDraft(proposalId, formData, mapperOptions);
       } else {
-        await createProposalDraft(formData, mapperOptions);
+        const created = await createProposalDraft(formData, mapperOptions);
+        savedId = created.id;
       }
 
       if (autosaveManagerRef.current) {
         autosaveManagerRef.current.clear();
       }
       setSuccess('Draft saved successfully!');
-      setTimeout(() => setSuccess(''), 2000);
+      setTimeout(() => {
+        setSuccess('');
+        navigate(`/applicant/proposals/${savedId}/documents`);
+      }, 1500);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to save draft');
+      setError(getApiError(err, 'Failed to save draft'));
     }
   };
 
@@ -282,7 +290,7 @@ export default function InnovationProposalForm({ isEdit = false }) {
       const mapperOptions = await getInnovationMapperOptions();
       let savedId = proposalId;
 
-      if (isEdit && proposalId) {
+      if (isEditMode && proposalId) {
         await updateProposalDraft(proposalId, formData, mapperOptions);
       } else {
         const created = await createProposalDraft(formData, mapperOptions);
@@ -295,7 +303,7 @@ export default function InnovationProposalForm({ isEdit = false }) {
       setSuccess('Draft saved. Upload documents to complete submission.');
       setTimeout(() => navigate(`/applicant/proposals/${savedId}/documents`), 1500);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to save proposal');
+      setError(getApiError(err, 'Failed to save proposal'));
     } finally {
       setSubmitting(false);
     }
@@ -442,7 +450,7 @@ export default function InnovationProposalForm({ isEdit = false }) {
   return (
     <DashboardLayout role="applicant">
       <PageHeader
-        title={isEdit ? 'Edit Innovation Proposal' : 'Create Innovation Proposal'}
+        title={isEditMode ? 'Edit Innovation Proposal' : 'Create Innovation Proposal'}
         subtitle="Complete all required fields marked with *"
       />
 

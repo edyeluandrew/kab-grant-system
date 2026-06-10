@@ -12,6 +12,7 @@ import { getProjectTeamMembers, addProjectTeamMember, deleteProjectTeamMember } 
 import { getFaculties, getDepartments, getResearchDisciplines } from '../../api/referenceApi';
 import { sexOptions, qualificationOptions, designationOptions } from '../../utils/formOptions';
 import { validateKABEmail, validatePhone, isOtherOption } from '../../utils/validations';
+import { getApiError } from '../../utils/apiError';
 
 export default function ProjectTeamMembers() {
   const { id: proposalId } = useParams();
@@ -164,7 +165,10 @@ export default function ProjectTeamMembers() {
       // Stage 2: Actually add the member
       try {
         setSubmitError(null);
-        const newMember = await addProjectTeamMember(proposalId, formData);
+        const newMember = await addProjectTeamMember(proposalId, formData, {
+          departments,
+          disciplines,
+        });
         setTeamMembers((prev) => [...prev, newMember]);
         setSuccess('Team member added successfully');
         setFormData({
@@ -184,7 +188,7 @@ export default function ProjectTeamMembers() {
         setShowPreview(false);
         setTimeout(() => setSuccess(null), 3000);
       } catch (err) {
-        setSubmitError(err.message || 'Failed to add team member');
+        setSubmitError(getApiError(err, 'Failed to add team member'));
       }
     }
   };
@@ -224,7 +228,7 @@ export default function ProjectTeamMembers() {
         setSuccess('Team member removed successfully');
         setTimeout(() => setSuccess(null), 3000);
       } catch (err) {
-        setSubmitError(err.message || 'Failed to remove team member');
+        setSubmitError(getApiError(err, 'Failed to remove team member'));
       }
     }
   };
@@ -491,7 +495,7 @@ export default function ProjectTeamMembers() {
                 {teamMembers.map((member) => (
                   <tr key={member.id} className="border-b border-border hover:bg-background">
                     <td className="py-3 px-4 text-textMain font-medium">
-                      {member.firstName} {member.lastName}
+                      {member.first_name || member.firstName} {member.last_name || member.lastName}
                     </td>
                     <td className="py-3 px-4 text-textMain">{member.designation || '-'}</td>
                     <td className="py-3 px-4 text-textMain">{member.faculty || '-'}</td>

@@ -62,7 +62,7 @@ export default function ApplicantDashboard() {
       setActionSuccess('Draft deleted successfully');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
-      setError(err.message || 'Failed to delete draft');
+      setError(getApiError(err, 'Failed to delete draft'));
     } finally {
       setActionLoading(null);
     }
@@ -78,48 +78,23 @@ export default function ApplicantDashboard() {
       setActionSuccess('Proposal submitted successfully');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
-      setError(err.message || 'Failed to submit proposal');
+      const message = getApiError(err, 'Failed to submit proposal');
+      if (message.includes('Missing:')) {
+        navigate(`/applicant/proposals/${proposalId}/documents`);
+      } else {
+        setError(message);
+      }
     } finally {
       setActionLoading(null);
     }
-  }
+  };
 
-  const getStatusBadge = (status) => {
+  const getProposalTypeBadge = (grantType) => {
     const variants = {
-      draft: 'default',
-      submitted: 'info',
-      under_review: 'warning',
-      approved: 'success',
-      rejected: 'danger',
+      Research: 'info',
+      Innovation: 'accent',
     };
-    return variants[status] || 'default';
-  };
-
-  const getStatusLabel = (status) => {
-    const labels = {
-      draft: 'Draft',
-      submitted: 'Submitted',
-      under_review: 'Under Review',
-      approved: 'Approved',
-      rejected: 'Rejected',
-    };
-    return labels[status] || status;
-  };
-
-  const getProposalTypeBadge = (proposalType) => {
-    const variants = {
-      research: 'info',
-      innovation: 'accent',
-    };
-    return variants[proposalType] || 'default';
-  };
-
-  const getProposalTypeLabel = (proposalType) => {
-    const labels = {
-      research: 'Research',
-      innovation: 'Innovation',
-    };
-    return labels[proposalType] || proposalType;
+    return variants[grantType] || 'default';
   };
 
   if (loading) return <Loader />;
@@ -175,24 +150,27 @@ const userFullName = user ? `${user.first_name} ${user.surname}` : 'Researcher';
                 </tr>
               </thead>
               <tbody>
-                {proposals.map((proposal) => (
+                {proposals.map((proposal) => {
+                  const { uploaded, total } = getAttachmentSummary(proposal);
+                  const grantType = getGrantType(proposal);
+                  return (
                   <tr key={proposal.id} className="border-b border-border hover:bg-background">
-                    <td className="py-3 px-4 text-textMain">{proposal.protocolNo}</td>
+                    <td className="py-3 px-4 text-textMain">{getProtocolNo(proposal)}</td>
                     <td className="py-3 px-4 text-textMain">{proposal.title}</td>
                     <td className="py-3 px-4">
-                      {proposal.proposal_type && (
-                        <Badge variant={getProposalTypeBadge(proposal.proposal_type)}>
-                          {getProposalTypeLabel(proposal.proposal_type)}
+                      {grantType && (
+                        <Badge variant={getProposalTypeBadge(grantType)}>
+                          {grantType}
                         </Badge>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-sm text-muted">{proposal.attachmentsSummary}</td>
+                    <td className="py-3 px-4 text-sm text-muted">{uploaded}/{total} uploaded</td>
                     <td className="py-3 px-4">
-                      <Badge variant={getStatusBadge(proposal.status)}>
+                      <Badge variant={getStatusVariant(proposal.status)}>
                         {getStatusLabel(proposal.status)}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 text-textMain">{proposal.membersCount}</td>
+                    <td className="py-3 px-4 text-textMain">{getTeamMemberCount(proposal)}</td>
                     <td className="py-3 px-4 text-muted">-</td>
                     <td className="py-3 px-4">
                       <div className="space-y-2">
@@ -210,18 +188,13 @@ const userFullName = user ? `${user.first_name} ${user.surname}` : 'Researcher';
                         </div>
 
                         {/* Draft Actions */}
-                        {proposal.status === 'draft' && (
+                        {isDraftLike(proposal.status) && (
                           <>
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                onClick={() => {
-                                  const editPath = proposal.proposal_type === 'research'
-                                    ? `/applicant/proposals/${proposal.id}/edit/research`
-                                    : `/applicant/proposals/${proposal.id}/edit/innovation`;
-                                  navigate(editPath);
-                                }}
+                                onClick={() => navigate(getEditPath(proposal))}
                                 disabled={actionLoading === proposal.id}
                                 className="flex-1"
                               >
@@ -275,7 +248,8 @@ const userFullName = user ? `${user.first_name} ${user.surname}` : 'Researcher';
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
