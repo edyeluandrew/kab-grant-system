@@ -39,7 +39,11 @@ export default function AwardedProposals() {
     { key: 'grant_type', label: 'Type', render: (row) => <Badge variant="info">{row.grant_type}</Badge> },
     { key: 'pi', label: 'Principal Investigator', render: (row) => `${row.pi_first_name} ${row.pi_last_name}` },
     { key: 'status', label: 'Status', render: () => <Badge variant="warning">Awarded</Badge> },
-    { key: 'created_at', label: 'Submitted On' },
+    {
+      key: 'submitted_at',
+      label: 'Submitted On',
+      render: (row) => row.submitted_at || row.admin_decision_at || row.created_at || '-',
+    },
     {
       key: 'actions',
       label: 'Actions',

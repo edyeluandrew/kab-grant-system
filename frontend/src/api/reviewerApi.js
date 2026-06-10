@@ -69,6 +69,7 @@ export const submitReview = async (proposalId, payload) => {
 /** Persist proposal metadata for submitted reviews list (API omits proposal_id). */
 export const cacheProposalForReview = (proposalId, snapshot) => {
   saveReviewSnapshot(proposalId, snapshot);
+  pushReviewMeta(snapshot);
 };
 
 // ─── My Reviews ───────────────────────────────────────────────────────────────

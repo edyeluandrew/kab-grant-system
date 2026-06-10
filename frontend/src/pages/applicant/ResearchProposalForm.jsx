@@ -705,8 +705,8 @@ export default function ResearchProposalForm({ isEdit = false }) {
   return (
     <DashboardLayout role="applicant">
       <PageHeader
-        title={isEdit ? 'Edit Research Proposal' : 'Submit Research Proposal'}
-        subtitle={isEdit ? 'Update your proposal details' : 'Complete the application form for your research project'}
+        title={isEditMode ? 'Edit Research Proposal' : 'Submit Research Proposal'}
+        subtitle={isEditMode ? 'Update your proposal details' : 'Complete the application form for your research project'}
       />
 
       {error && <Alert variant="danger" title="Error">{error}</Alert>}

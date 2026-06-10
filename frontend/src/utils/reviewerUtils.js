@@ -19,6 +19,7 @@ export function normalizeReviewers(rows = []) {
 
 const SUBMITTED_KEY = 'kab_reviewer_submitted_proposals';
 const SNAPSHOT_KEY = 'kab_reviewer_review_snapshots';
+const META_LIST_KEY = 'kab_reviewer_review_meta_list';
 
 export function getSubmittedProposalIds() {
   try {
@@ -51,6 +52,25 @@ export function getReviewSnapshots() {
     return JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || '{}');
   } catch {
     return {};
+  }
+}
+
+/** Ordered proposal metadata for my-reviews (API has no proposal_id). */
+export function pushReviewMeta(meta) {
+  try {
+    const list = JSON.parse(localStorage.getItem(META_LIST_KEY) || '[]');
+    list.unshift(meta);
+    localStorage.setItem(META_LIST_KEY, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getReviewMetaList() {
+  try {
+    return JSON.parse(localStorage.getItem(META_LIST_KEY) || '[]');
+  } catch {
+    return [];
   }
 }
 
