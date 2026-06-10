@@ -1,5 +1,7 @@
 import axiosClient from './axiosClient';
-import { normalizeProposalPayload } from '../utils/proposalMapper';
+import { normalizeProposalPayload, mapTeamMemberFormToApi } from '../utils/proposalMapper';
+import { buildAttachmentChecklist } from '../utils/attachmentUtils';
+import { attachmentTypeOptions } from '../utils/formOptions';
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
@@ -126,6 +128,11 @@ export const deleteDraft = async (proposalId) => {
  */
 export const getProposalAttachments = async (proposalId) => {
   const proposal = await getProposalDetails(proposalId);
+  return buildAttachmentChecklist(proposal.attachments || []);
+};
+
+export const getRawProposalAttachments = async (proposalId) => {
+  const proposal = await getProposalDetails(proposalId);
   return proposal.attachments || [];
 };
 
@@ -142,24 +149,17 @@ export const uploadProposalAttachment = async (proposalId, attachmentType, file)
   formData.append('attachment_type', attachmentType);
   formData.append('file', file);
 
-  const response = await axiosClient.post(
-    `/proposals/${proposalId}/attachments`,
-    formData,
-    { headers: { 'Content-Type': 'multipart/form-data' } }
-  );
+  const response = await axiosClient.post(`/proposals/${proposalId}/attachments`, formData);
   return response.data;
 };
 
-/**
- * Delete an attachment.
- * DELETE /api/v1/proposals/{proposal_id}/attachments/{attachment_id}
- * Returns: { message }
- */
-export const deleteProposalAttachment = async (proposalId, attachmentId) => {
-  // Note: API endpoint not explicitly in spec, but standard REST pattern
-  const response = await axiosClient.delete(`/proposals/${proposalId}/attachments/${attachmentId}`);
-  return response.data;
+/** Backend has no DELETE attachment route — re-upload replaces same type. */
+export const deleteProposalAttachment = async () => {
+  throw new Error('Attachments cannot be deleted. Upload a new file to replace the existing one.');
 };
+
+/** All attachment types required by backend for auto-submission. */
+export const REQUIRED_ATTACHMENT_TYPES = attachmentTypeOptions.map((o) => o.value);
 
 // ─── Team Members ─────────────────────────────────────────────────────────────
 
@@ -181,19 +181,11 @@ export const getProjectTeamMembers = async (proposalId) => {
  * Returns: { id, first_name, last_name, qualification, gender, designation,
  *            email, phone, created_at }
  */
-export const addProjectTeamMember = async (proposalId, payload) => {
-  const response = await axiosClient.post(`/proposals/${proposalId}/team-members`, {
-    first_name: payload.first_name,
-    last_name: payload.last_name,
-    qualification: payload.qualification,
-    gender: payload.gender,
-    designation: payload.designation,
-    faculty_id: payload.faculty_id || null,
-    department: payload.department,
-    specialization: payload.specialization || null,
-    email: payload.email,
-    phone: payload.phone || null,
-  });
+export const addProjectTeamMember = async (proposalId, payload, mapperOptions = {}) => {
+  const apiPayload = payload.first_name
+    ? payload
+    : mapTeamMemberFormToApi(payload, mapperOptions);
+  const response = await axiosClient.post(`/proposals/${proposalId}/team-members`, apiPayload);
   return response.data;
 };
 
@@ -210,22 +202,25 @@ export const deleteProjectTeamMember = async (proposalId, memberId) => {
 // ─── Proposal Submission ──────────────────────────────────────────────────────
 
 /**
- * Submit a draft proposal.
- * Note: Not explicitly in API spec - may need custom endpoint
- * or use a status change endpoint
+ * Proposals auto-submit when all 9 attachment types are uploaded.
+ * This helper verifies readiness and returns the latest proposal state.
  */
 export const submitProposal = async (proposalId) => {
-  try {
-    // Try PATCH approach (changing status)
-    const response = await axiosClient.patch(`/proposals/${proposalId}`, {
-      status: 'Submitted',
-    });
-    return response.data;
-  } catch (error) {
-    // If PATCH fails, proposal might auto-submit on last attachment
-    console.warn('submitProposal: Auto-submission on last attachment or use PATCH');
-    throw error;
+  const proposal = await getProposalDetails(proposalId);
+  const uploadedTypes = new Set((proposal.attachments || []).map((a) => a.attachment_type));
+  const missing = REQUIRED_ATTACHMENT_TYPES.filter((t) => !uploadedTypes.has(t));
+  if (missing.length > 0) {
+    throw new Error(
+      `Upload all required documents before submitting. Missing: ${missing.join(', ')}`
+    );
   }
+  if (proposal.status === 'Submitted') return proposal;
+  if (proposal.status === 'Draft' || proposal.status === 'Missing Attachments') {
+    throw new Error(
+      'All documents appear uploaded but status has not updated yet. Refresh the page or re-upload the last file.'
+    );
+  }
+  return proposal;
 };
 
 // ─── Notifications ────────────────────────────────────────────────────────────

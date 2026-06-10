@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Save, Eye, CheckCircle2, ArrowLeft } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
@@ -11,6 +11,7 @@ import Loader from '../../components/common/Loader';
 import { createProposalDraft, updateProposalDraft, getProposalDetails } from '../../api/applicantApi';
 import { getFaculties, getDepartments, getResearchDisciplines, getGrantCalls } from '../../api/referenceApi';
 import { mapApiToResearchForm } from '../../utils/proposalMapper';
+import { getApiError } from '../../utils/apiError';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 import { createAutosaveManager } from '../../utils/autosave';
 import {
@@ -49,9 +50,11 @@ const WORD_LIMITS = {
 
 export default function ResearchProposalForm({ isEdit = false }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { id: proposalId } = useParams();
+  const isEditMode = isEdit || pathname.includes('/edit/');
   const autosaveManagerRef = useRef(null);
-  const [loading, setLoading] = useState(isEdit ? true : false);
+  const [loading, setLoading] = useState(isEditMode && proposalId ? true : false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [errors, setErrors] = useState({});
@@ -126,13 +129,13 @@ export default function ResearchProposalForm({ isEdit = false }) {
   // Load reference data and restore autosaved draft on mount
   useEffect(() => {
     // Initialize autosave manager with appropriate key based on mode
-    const autosaveKey = isEdit && proposalId 
+    const autosaveKey = isEditMode && proposalId 
       ? `kab_research_proposal_edit_${proposalId}`
       : 'kab_research_proposal_draft';
     autosaveManagerRef.current = createAutosaveManager(autosaveKey, defaultFormData);
 
     // Load proposal data if in edit mode
-    if (isEdit && proposalId) {
+    if (isEditMode && proposalId) {
       const loadProposalData = async () => {
         try {
           const proposal = await getProposalDetails(proposalId);
@@ -185,7 +188,7 @@ export default function ResearchProposalForm({ isEdit = false }) {
     };
 
     loadDropdownData();
-  }, [isEdit, proposalId]);
+  }, [isEditMode, proposalId]);
 
   // Load departments when faculty changes
   useEffect(() => {
@@ -453,25 +456,27 @@ export default function ResearchProposalForm({ isEdit = false }) {
       setError(null);
       
       const mapperOptions = { departments, disciplines };
-      if (isEdit && proposalId) {
+      let savedId = proposalId;
+      if (isEditMode && proposalId) {
         await updateProposalDraft(proposalId, formData, mapperOptions);
         if (autosaveManagerRef.current) {
           autosaveManagerRef.current.clear();
         }
       } else {
-        await createProposalDraft(formData, mapperOptions);
+        const created = await createProposalDraft(formData, mapperOptions);
+        savedId = created.id;
         if (autosaveManagerRef.current) {
           autosaveManagerRef.current.clear();
         }
       }
-      
+
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        navigate('/applicant/proposals');
-      }, 2000);
+        navigate(`/applicant/proposals/${savedId}/documents`);
+      }, 1500);
     } catch (err) {
-      setError(err.message || 'Failed to save draft');
+      setError(getApiError(err, 'Failed to save draft'));
     } finally {
       setLoading(false);
     }
@@ -498,19 +503,21 @@ export default function ResearchProposalForm({ isEdit = false }) {
         setError(null);
         
         const mapperOptions = { departments, disciplines };
-        if (isEdit && proposalId) {
+        let savedId = proposalId;
+        if (isEditMode && proposalId) {
           await updateProposalDraft(proposalId, formData, mapperOptions);
         } else {
-          await createProposalDraft(formData, mapperOptions);
+          const created = await createProposalDraft(formData, mapperOptions);
+          savedId = created.id;
         }
-        
+
         setSuccess(true);
         setTimeout(() => {
           setSuccess(false);
-          navigate('/applicant/proposals');
-        }, 2000);
+          navigate(`/applicant/proposals/${savedId}/documents`);
+        }, 1500);
       } catch (err) {
-        setError(err.message || 'Failed to submit proposal');
+        setError(getApiError(err, 'Failed to save proposal'));
       } finally {
         setLoading(false);
       }

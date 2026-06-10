@@ -230,3 +230,28 @@ export function normalizeProposalPayload(payload, options = {}) {
   }
   return mapResearchFormToApi(payload, options);
 }
+
+export function mapTeamMemberFormToApi(formData, { departments = [], disciplines = [] } = {}) {
+  const qualification = labelFor(qualificationOptions, formData.qualifications);
+  const designation = labelFor(designationOptions, formData.designation);
+  const specialization = resolveSpecialization(formData.specialization, disciplines);
+
+  return {
+    first_name: formData.firstName,
+    last_name: formData.lastName,
+    qualification:
+      formData.qualifications === 'others'
+        ? formData.qualificationsOther || 'Others'
+        : qualification,
+    gender: mapGender(formData.gender),
+    designation:
+      formData.designation === 'others'
+        ? formData.designationOther || 'Others'
+        : designation,
+    faculty_id: formData.faculty ? Number(formData.faculty) : null,
+    department: resolveDepartmentName(formData.department, departments),
+    specialization: specialization || null,
+    email: formData.email,
+    phone: formData.phone || null,
+  };
+}
