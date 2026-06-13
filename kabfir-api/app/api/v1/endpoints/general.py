@@ -4,8 +4,10 @@ from sqlalchemy import select
 from typing import List
 from app.core.database import get_db
 from app.core.deps import get_current_admin, get_current_user
-from app.models.models import Faculty, Department, SystemSetting
-from app.schemas.schemas import FacultyResponse, DepartmentResponse, MessageResponse
+from app.models.models import Faculty, Department, SystemSetting, GrantCall, GrantCallStatus
+from app.schemas.schemas import (
+    FacultyResponse, DepartmentResponse, MessageResponse, GrantCallResponse,
+)
 from pydantic import BaseModel
 from datetime import date
 from typing import Optional
@@ -141,6 +143,17 @@ class SystemSettingResponse(BaseModel):
     is_accepting_applications: bool
 
     model_config = {"from_attributes": True}
+
+
+@router.get("/grant-calls", response_model=List[GrantCallResponse])
+async def list_open_grant_calls(db: AsyncSession = Depends(get_db)):
+    """Public — list open grant calls for the landing page and anonymous visitors."""
+    result = await db.execute(
+        select(GrantCall)
+        .where(GrantCall.status == GrantCallStatus.open)
+        .order_by(GrantCall.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 @router.get("/settings", response_model=SystemSettingResponse)

@@ -143,7 +143,7 @@ export default function Landing() {
             <SearchX className="w-10 h-10 text-muted" />
             <p className="text-textMain font-semibold text-lg">No Active Grant Calls</p>
             <p className="text-muted text-sm max-w-sm">
-              There are no open grant calls at the moment. Please check back later or create an account to get notified.
+              There are no open grant calls at the moment. Please check back soon.
             </p>
             {!authLoading && !isAuthenticated && (
               <Link

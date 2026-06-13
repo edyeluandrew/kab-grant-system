@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { resolveApiBaseUrl } from './apiBaseUrl';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://kab-grant-system.onrender.com/api/v1';
+const API_BASE_URL = resolveApiBaseUrl();
 const AUTH_USER_KEY = 'kab_auth_user';
 
 const axiosClient = axios.create({

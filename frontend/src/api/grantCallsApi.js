@@ -1,5 +1,9 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://kab-grant-system.onrender.com/api/v1';
 const OPEN_CALLS_CACHE_KEY = 'kab_public_open_grant_calls';
+const STATIC_GRANT_CALLS_PATH = '/open-grant-calls.json';
+
+import { resolveApiBaseUrl } from './apiBaseUrl';
+
+const API_BASE = resolveApiBaseUrl();
 
 export function cacheOpenGrantCallsForLanding(calls) {
   const openCalls = (calls || []).filter((call) => call.status === 'Open');
@@ -8,6 +12,7 @@ export function cacheOpenGrantCallsForLanding(calls) {
   } catch {
     // ignore quota errors
   }
+  return openCalls;
 }
 
 export function readCachedOpenGrantCalls() {
@@ -20,13 +25,36 @@ export function readCachedOpenGrantCalls() {
   }
 }
 
+/** Public endpoint — no authentication required. */
+export async function fetchPublicGrantCalls() {
+  const response = await fetch(`${API_BASE}/general/grant-calls`, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const detail = body.detail || `Failed to load grant calls (${response.status})`;
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
 /**
- * Fetch grant calls from /admin/grant-calls.
- * No query params — grant_type filtering is done client-side only.
+ * Fetch grant calls from /admin/grant-calls (authenticated).
+ * @param {object} options
+ * @param {string|null} options.token - Bearer token to use (explicit only)
+ * @param {boolean} options.useSessionFallback - Also try localStorage authToken when token omitted
  */
-export async function fetchGrantCalls({ token = null } = {}) {
+export async function fetchGrantCalls({ token = undefined, useSessionFallback = true } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  const authToken = token || localStorage.getItem('authToken');
+
+  let authToken = token;
+  if (authToken === undefined && useSessionFallback) {
+    authToken = localStorage.getItem('authToken');
+  }
+
   if (authToken) {
     headers.Authorization = `Bearer ${authToken}`;
   }
@@ -41,6 +69,24 @@ export async function fetchGrantCalls({ token = null } = {}) {
 
   const data = await response.json();
   return Array.isArray(data) ? data : [];
+}
+
+/** Public static file fallback — no authentication. */
+export async function fetchStaticOpenGrantCalls() {
+  try {
+    const response = await fetch(STATIC_GRANT_CALLS_PATH, { cache: 'no-store' });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const list = Array.isArray(data) ? data : data?.grant_calls;
+    if (!Array.isArray(list)) return [];
+    const openCalls = list.filter((call) => call.status === 'Open');
+    if (openCalls.length > 0) {
+      cacheOpenGrantCallsForLanding(openCalls);
+    }
+    return openCalls;
+  } catch {
+    return [];
+  }
 }
 
 function normalizeGrantType(type) {
@@ -71,41 +117,48 @@ export function mapGrantCallsToDropdownOptions(calls, grantType = null) {
 }
 
 /**
- * Proposal form dropdown — same fetch path as the landing page
- * (public token → session token → cache fallback), then map to options.
+ * Landing & proposal forms — load open grant calls without requiring login.
+ * Order: public API → static JSON → session token → cache
  */
+export async function getOpenGrantCallsForLanding() {
+  // 1. Public API — anonymous visitors (no account or token needed)
+  try {
+    const calls = await fetchPublicGrantCalls();
+    return cacheOpenGrantCallsForLanding(calls);
+  } catch (error) {
+    console.warn('Public grant calls fetch failed:', error.message);
+  }
+
+  // 2. Static JSON bundled with the app
+  const staticCalls = await fetchStaticOpenGrantCalls();
+  if (staticCalls.length > 0) {
+    return staticCalls;
+  }
+
+  // 3. Logged-in visitor — refresh from their session
+  const sessionToken = localStorage.getItem('authToken');
+  if (sessionToken) {
+    try {
+      const calls = await fetchGrantCalls({ token: sessionToken, useSessionFallback: false });
+      return cacheOpenGrantCallsForLanding(calls);
+    } catch (error) {
+      console.warn('Session grant calls fetch failed:', error.message);
+    }
+  }
+
+  // 4. Last resort: browser cache from a prior successful load
+  const cached = readCachedOpenGrantCalls();
+  if (cached.length > 0) return cached;
+
+  return [];
+}
+
 export async function getOpenGrantCallsForProposalForm(grantType = null) {
   const rawCalls = await getOpenGrantCallsForLanding();
-  console.log('[GrantCalls] raw open calls for proposal form:', rawCalls);
-
-  const options = mapGrantCallsToDropdownOptions(rawCalls, grantType);
-  console.log('[GrantCalls] proposal dropdown options:', options);
-
-  return options;
+  return mapGrantCallsToDropdownOptions(rawCalls, grantType);
 }
 
 /** @deprecated Use getOpenGrantCallsForProposalForm */
 export async function getOpenGrantCallsForDropdown(grantType = null) {
   return getOpenGrantCallsForProposalForm(grantType);
-}
-
-/**
- * Landing page: uses VITE_PUBLIC_GRANT_CALLS_TOKEN when set, else session token, else cache.
- */
-export async function getOpenGrantCallsForLanding() {
-  const publicToken = import.meta.env.VITE_PUBLIC_GRANT_CALLS_TOKEN;
-  const sessionToken = localStorage.getItem('authToken');
-  const token = publicToken || sessionToken || null;
-
-  try {
-    const calls = await fetchGrantCalls({ token });
-    const openCalls = calls.filter((call) => call.status === 'Open');
-    cacheOpenGrantCallsForLanding(openCalls);
-    return openCalls;
-  } catch (error) {
-    const cached = readCachedOpenGrantCalls();
-    if (cached.length > 0) return cached;
-    console.warn('Landing grant calls unavailable:', error.message);
-    return [];
-  }
 }

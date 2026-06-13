@@ -85,6 +85,49 @@ class TestDepartments:
         assert resp.status_code == 403
 
 
+class TestPublicGrantCalls:
+
+    SAMPLE_CALL = {
+        "title": "Public Landing Grant Call",
+        "description": "Visible to anonymous visitors.",
+        "grant_type": "Research",
+        "academic_year": 2026,
+        "opening_date": "2026-01-01",
+        "closing_date": "2026-06-30",
+        "max_budget": "5000000.00",
+    }
+
+    async def test_anonymous_can_list_open_grant_calls(self, client, admin_token):
+        create = await client.post(
+            "/api/v1/admin/grant-calls",
+            json=self.SAMPLE_CALL,
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        call_id = create.json()["id"]
+        await client.post(
+            f"/api/v1/admin/grant-calls/{call_id}/open-window",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+
+        resp = await client.get("/api/v1/general/grant-calls")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert any(c["id"] == call_id for c in data)
+        assert all(c["status"] == "Open" for c in data)
+
+    async def test_anonymous_does_not_see_draft_or_closed_calls(self, client, admin_token):
+        create = await client.post(
+            "/api/v1/admin/grant-calls",
+            json={**self.SAMPLE_CALL, "title": "Draft Only Call"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        draft_id = create.json()["id"]
+
+        resp = await client.get("/api/v1/general/grant-calls")
+        assert resp.status_code == 200
+        assert all(c["id"] != draft_id for c in resp.json())
+
+
 class TestSystemSettings:
 
     async def test_get_settings_public(self, client, seed_settings):

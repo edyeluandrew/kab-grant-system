@@ -42,9 +42,7 @@ export const getApplicantDashboard = async () => {
  */
 export const getAvailableGrantCalls = async () => {
   const { getOpenGrantCallsForLanding } = await import('./grantCallsApi');
-  const calls = await getOpenGrantCallsForLanding();
-  console.log('[GrantCalls] getAvailableGrantCalls:', calls);
-  return calls;
+  return getOpenGrantCallsForLanding();
 };
 
 /**

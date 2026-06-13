@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "sync:grant-calls": "node scripts/sync-open-grant-calls.mjs",
+    "build:public": "npm run sync:grant-calls && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
