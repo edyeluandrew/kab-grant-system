@@ -18,6 +18,8 @@ import {
   MAX_UPLOAD_BYTES,
   ALLOWED_UPLOAD_EXTENSIONS,
 } from '../../utils/fileUploadUtils';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
+import { findGrantCallById } from '../../utils/grantCallDocuments';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 import { createAutosaveManager } from '../../utils/autosave';
 import {
@@ -699,6 +701,13 @@ export default function ResearchProposalForm({ isEdit = false }) {
               {renderSelectWithOther('researchType', 'Type of Research', typeOfResearchOptions, 'researchTypeOther')}
               {renderSelect('grantCall', 'Grant Call', grantCalls)}
             </div>
+            {formData.grantCall && (
+              <GrantCallDocumentsList
+                grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+                title="Grant Call Documents"
+                className="mt-2"
+              />
+            )}
           </div>
         </Card>
 

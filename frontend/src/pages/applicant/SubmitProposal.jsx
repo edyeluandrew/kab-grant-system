@@ -9,6 +9,8 @@ import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
 import { createProposalDraft } from '../../api/applicantApi';
 import { getFaculties, getDepartments, getResearchDisciplines, getGrantCalls } from '../../api/referenceApi';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
+import { findGrantCallById } from '../../utils/grantCallDocuments';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 import {
   validateRequired,
@@ -520,6 +522,13 @@ export default function SubmitProposal() {
               {renderSelectWithOther('researchType', 'Type of Research', typeOfResearchOptions, 'researchTypeOther')}
               {renderSelect('grantCall', 'Grant Call', grantCalls)}
             </div>
+            {formData.grantCall && (
+              <GrantCallDocumentsList
+                grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+                title="Grant Call Documents"
+                className="mt-2"
+              />
+            )}
           </div>
         </Card>
 

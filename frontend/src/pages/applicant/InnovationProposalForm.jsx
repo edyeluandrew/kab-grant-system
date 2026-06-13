@@ -15,6 +15,8 @@ import { getApiError } from '../../utils/apiError';
 import { createAutosaveManager } from '../../utils/autosave';
 import { countWords } from '../../utils/validations';
 import { validateUploadFile, UPLOAD_ACCEPT_ATTR, MAX_UPLOAD_BYTES } from '../../utils/fileUploadUtils';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
+import { findGrantCallById } from '../../utils/grantCallDocuments';
 
 // Word count limits - EXACT FROM SPECIFICATION
 const WORD_LIMITS = {
@@ -348,6 +350,10 @@ export default function InnovationProposalForm({ isEdit = false }) {
             <div className="bg-blue-50 p-4 rounded border border-blue-200">
               <p className="font-semibold text-blue-900">{grantCallName}</p>
             </div>
+            <GrantCallDocumentsList
+              grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+              title="Grant Call Documents"
+            />
           </Card>
 
           {/* Innovation Content - Editable */}
@@ -437,6 +443,13 @@ export default function InnovationProposalForm({ isEdit = false }) {
               ))}
             </select>
             {errors.grantCall && <p className="text-red-600 text-sm mt-1">{errors.grantCall}</p>}
+            {formData.grantCall && (
+              <GrantCallDocumentsList
+                grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+                title="Grant Call Documents"
+                className="mt-3"
+              />
+            )}
           </div>
         </Card>
 

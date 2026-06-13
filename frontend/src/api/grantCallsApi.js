@@ -55,6 +55,7 @@ export function mapGrantCallsToDropdownOptions(calls, grantType = null) {
     .filter((call) => call.status === 'Open')
     .filter((call) => !typeFilter || normalizeGrantType(call.grant_type) === typeFilter)
     .map((call) => ({
+      ...call,
       id: call.id,
       value: String(call.id),
       title: call.title,

@@ -10,6 +10,7 @@ import {
   Tag,
   SearchX,
 } from 'lucide-react';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
 
 const STATUS_CONFIG = {
   Open: { bg: 'bg-success/20', text: 'text-success', label: '✓ Open for Applications' },
@@ -201,6 +202,8 @@ export default function Landing() {
                       </p>
                     </div>
                   </div>
+
+                  <GrantCallDocumentsList grantCall={call} />
 
                   {/* CTA */}
                   {!authLoading && !isAuthenticated && (
