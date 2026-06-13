@@ -155,7 +155,30 @@ export async function getOpenGrantCallsForLanding() {
 
 export async function getOpenGrantCallsForProposalForm(grantType = null) {
   const rawCalls = await getOpenGrantCallsForLanding();
-  return mapGrantCallsToDropdownOptions(rawCalls, grantType);
+  const interestedCalls = await filterCallsByUserInterests(rawCalls);
+  return mapGrantCallsToDropdownOptions(interestedCalls, grantType);
+}
+
+/** Only grant calls the user has expressed interest in (for proposal forms). */
+export async function filterCallsByUserInterests(calls) {
+  try {
+    const { getMyGrantCallInterests } = await import('./grantInterestsApi');
+    const interests = await getMyGrantCallInterests();
+    const interestedIds = new Set(interests.map((i) => i.grant_call_id));
+    return (calls || []).filter((call) => interestedIds.has(call.id));
+  } catch {
+    return [];
+  }
+}
+
+export async function getInterestedGrantCallIds() {
+  try {
+    const { getMyGrantCallInterests } = await import('./grantInterestsApi');
+    const interests = await getMyGrantCallInterests();
+    return new Set(interests.map((i) => i.grant_call_id));
+  } catch {
+    return new Set();
+  }
 }
 
 /** @deprecated Use getOpenGrantCallsForProposalForm */

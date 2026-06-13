@@ -23,6 +23,49 @@ MAX_FILE_SIZE_MB = 10
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 
+async def upload_pdf_file(file: UploadFile, folder: str = "kabfir/interests") -> dict:
+    """Validate and upload a PDF-only file to Cloudinary."""
+    if file.content_type != "application/pdf":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF documents are allowed for interest submissions.",
+        )
+
+    contents = await file.read()
+
+    if len(contents) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File size exceeds the {MAX_FILE_SIZE_MB}MB limit.",
+        )
+
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF documents (.pdf) are allowed.",
+        )
+
+    try:
+        result = cloudinary.uploader.upload(
+            contents,
+            folder=folder,
+            resource_type="raw",
+            use_filename=True,
+            unique_filename=True,
+        )
+        return {
+            "url": result["secure_url"],
+            "public_id": result["public_id"],
+            "file_name": file.filename,
+        }
+    except Exception as e:
+        logger.error(f"Cloudinary PDF upload failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="File upload failed. Please try again.",
+        )
+
+
 async def upload_file(file: UploadFile, folder: str = "kabfir/attachments") -> dict:
     """
     Validates and uploads a file to Cloudinary.

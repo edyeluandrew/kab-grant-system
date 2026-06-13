@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getOpenGrantCallsForLanding } from '../../api/grantCallsApi';
+import { APPLICANT_ROLES } from '../../constants/roles';
 import {
   CalendarDays,
   ArrowRight,
@@ -9,6 +10,7 @@ import {
   DollarSign,
   Tag,
   SearchX,
+  Heart,
 } from 'lucide-react';
 import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
 
@@ -75,6 +77,43 @@ export default function Landing() {
           Create Account
         </Link>
       </>
+    );
+  };
+
+  const renderInterestLink = (call) => {
+    const interestPath = `/applicant/grant-calls/${call.id}/interest`;
+
+    if (authLoading) return null;
+
+    if (!isAuthenticated) {
+      return (
+        <Link
+          to={`/login?redirect=${encodeURIComponent(interestPath)}`}
+          className="inline-flex items-center gap-1.5 bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
+        >
+          Express Interest <Heart className="w-4 h-4" />
+        </Link>
+      );
+    }
+
+    if (APPLICANT_ROLES.includes(user?.role)) {
+      return (
+        <Link
+          to={interestPath}
+          className="inline-flex items-center gap-1.5 bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
+        >
+          Express Interest <Heart className="w-4 h-4" />
+        </Link>
+      );
+    }
+
+    return (
+      <Link
+        to={redirectPathForRole(user.role)}
+        className="inline-flex items-center gap-1 text-primary text-sm font-medium hover:underline"
+      >
+        Go to Dashboard <ChevronRight className="w-4 h-4" />
+      </Link>
     );
   };
 
@@ -205,23 +244,14 @@ export default function Landing() {
 
                   <GrantCallDocumentsList grantCall={call} />
 
-                  {/* CTA */}
-                  {!authLoading && !isAuthenticated && (
-                    <Link
-                      to="/register"
-                      className="inline-flex items-center gap-1 text-primary text-sm font-medium hover:underline"
-                    >
-                      Apply Now <ChevronRight className="w-4 h-4" />
-                    </Link>
-                  )}
-                  {!authLoading && isAuthenticated && (
-                    <Link
-                      to={redirectPathForRole(user.role)}
-                      className="inline-flex items-center gap-1 text-primary text-sm font-medium hover:underline"
-                    >
-                      Go to Dashboard <ChevronRight className="w-4 h-4" />
-                    </Link>
-                  )}
+                  <div className="mt-auto pt-2 flex flex-col gap-2">
+                    {renderInterestLink(call)}
+                    {!authLoading && !isAuthenticated && (
+                      <p className="text-xs text-muted">
+                        Sign in or create an account to express interest, then apply for a proposal.
+                      </p>
+                    )}
+                  </div>
                 </div>
               );
             })}

@@ -122,6 +122,7 @@ class User(Base):
     proposals        = relationship("Proposal", back_populates="created_by_user", foreign_keys="Proposal.created_by")
     otp_tokens       = relationship("OTPToken", back_populates="user")
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False, foreign_keys="[Reviewer.user_id]")
+    grant_call_interests = relationship("GrantCallInterest", back_populates="user")
     status_changes   = relationship("ProposalStatusHistory", back_populates="changed_by_user")
 
 
@@ -181,6 +182,22 @@ class GrantCall(Base):
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
     created_by_user = relationship("User", foreign_keys=[created_by])
+    interests       = relationship("GrantCallInterest", back_populates="grant_call")
+
+
+class GrantCallInterest(Base):
+    __tablename__ = "grant_call_interests"
+
+    id                   = Column(Integer, primary_key=True, index=True)
+    grant_call_id        = Column(Integer, ForeignKey("grant_calls.id"), nullable=False, index=True)
+    user_id              = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    file_name            = Column(String(255), nullable=False)
+    cloudinary_url       = Column(Text, nullable=False)
+    cloudinary_public_id = Column(String(255), nullable=False)
+    submitted_at         = Column(DateTime(timezone=True), server_default=func.now())
+
+    grant_call = relationship("GrantCall", back_populates="interests")
+    user       = relationship("User", back_populates="grant_call_interests")
 
 
 # ─────────────────────────────────────────

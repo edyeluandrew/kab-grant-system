@@ -300,6 +300,15 @@ export const closeApplicationWindow = async (callId) => {
   return response.data;
 };
 
+/**
+ * List interest submissions for a grant call.
+ * GET /api/v1/admin/grant-calls/{call_id}/interests
+ */
+export const getGrantCallInterests = async (callId) => {
+  const response = await axiosClient.get(`/admin/grant-calls/${callId}/interests`);
+  return response.data;
+};
+
 // ─── DEPRECATED ALIASES (kept for backward compatibility) ─────────────────────
 
 /**

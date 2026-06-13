@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import List
 from datetime import date
 
 from app.core.database import get_db
 from app.core.deps import get_current_admin, get_current_user
-from app.models.models import GrantCall, GrantCallStatus, User
+from app.models.models import GrantCall, GrantCallStatus, GrantCallInterest, User
 from app.schemas.schemas import (
     GrantCallCreateRequest, GrantCallUpdateRequest,
-    GrantCallResponse, MessageResponse
+    GrantCallResponse, MessageResponse, AdminGrantCallInterestResponse,
 )
 
 router = APIRouter(prefix="/admin/grant-calls", tags=["Grant Calls"])
@@ -40,7 +41,32 @@ async def list_grant_calls(
         query = query.where(GrantCall.status == GrantCallStatus.open)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    calls = result.scalars().all()
+
+    if current_user.role in (UserRole.admin, UserRole.sgo_admin):
+        count_result = await db.execute(
+            select(GrantCallInterest.grant_call_id, func.count(GrantCallInterest.id))
+            .group_by(GrantCallInterest.grant_call_id)
+        )
+        counts = {row[0]: row[1] for row in count_result.all()}
+        return [
+            GrantCallResponse(
+                id=c.id,
+                title=c.title,
+                description=c.description,
+                grant_type=c.grant_type,
+                academic_year=c.academic_year,
+                opening_date=c.opening_date,
+                closing_date=c.closing_date,
+                max_budget=c.max_budget,
+                status=c.status.value if hasattr(c.status, "value") else str(c.status),
+                created_at=c.created_at,
+                interest_count=counts.get(c.id, 0),
+            )
+            for c in calls
+        ]
+
+    return calls
 
 
 @router.post("", response_model=GrantCallResponse, status_code=status.HTTP_201_CREATED)
@@ -180,3 +206,36 @@ async def delete_grant_call(
     await db.delete(call)
     await db.commit()
     return MessageResponse(message="Grant call deleted successfully.")
+
+
+@router.get("/{call_id}/interests", response_model=List[AdminGrantCallInterestResponse])
+async def list_grant_call_interests(
+    call_id: int,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin / SGO Admin: list interest submissions with applicant details."""
+    await _get_grant_call(call_id, db)
+
+    result = await db.execute(
+        select(GrantCallInterest)
+        .where(GrantCallInterest.grant_call_id == call_id)
+        .options(selectinload(GrantCallInterest.user))
+        .order_by(GrantCallInterest.submitted_at.desc())
+    )
+    interests = result.scalars().all()
+
+    return [
+        AdminGrantCallInterestResponse(
+            id=i.id,
+            grant_call_id=i.grant_call_id,
+            user_id=i.user_id,
+            first_name=i.user.first_name,
+            surname=i.user.surname,
+            email=i.user.email,
+            file_name=i.file_name,
+            document_url=i.cloudinary_url,
+            submitted_at=i.submitted_at,
+        )
+        for i in interests
+    ]

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, PenTool, Clock, CheckCircle } from 'lucide-react';
+import { FileText, PenTool, Clock, CheckCircle, Heart } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -11,6 +11,7 @@ import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
 import { useAuth } from '../../context/AuthContext';
 import { getApplicantDashboard, getMyProposals, deleteDraft } from '../../api/applicantApi';
+import { getMyGrantCallInterests } from '../../api/grantInterestsApi';
 import { getApiError } from '../../utils/apiError';
 import { isDraftLike, getStatusLabel, getStatusVariant } from '../../utils/statusUtils';
 import {
@@ -26,6 +27,7 @@ export default function ApplicantDashboard() {
   const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [proposals, setProposals] = useState([]);
+  const [interests, setInterests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
@@ -37,8 +39,10 @@ export default function ApplicantDashboard() {
         setLoading(true);
         const dashboardData = await getApplicantDashboard();
         const proposalsData = await getMyProposals();
+        const interestsData = await getMyGrantCallInterests();
         setDashboard(dashboardData);
         setProposals(proposalsData);
+        setInterests(interestsData || []);
         setError(null);
       } catch (err) {
         setError(getApiError(err, 'Failed to load dashboard'));
@@ -100,6 +104,60 @@ const userFullName = user ? `${user.first_name} ${user.surname}` : 'Researcher';
           <StatCard title="Approved" value={dashboard.stats.approved} icon={<CheckCircle className="w-8 h-8" />} />
         </div>
       )}
+
+      {/* Grant Call Interests */}
+      <Card title="My Grant Call Interests" subtitle="Interest submissions required before applying" className="mb-8">
+        {interests.length === 0 ? (
+          <div className="text-center py-6">
+            <Heart className="w-10 h-10 text-muted mx-auto mb-3" />
+            <p className="text-muted mb-4">
+              You have not expressed interest in any grant call yet.
+            </p>
+            <Button variant="primary" onClick={() => navigate('/')}>
+              Browse Grant Calls
+            </Button>
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Grant Call</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Type</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Document</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Status</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {interests.map((item) => (
+                  <tr key={item.id} className="border-b border-border hover:bg-background">
+                    <td className="py-3 px-4 text-textMain">{item.grant_call_title}</td>
+                    <td className="py-3 px-4">
+                      <Badge variant="info">{item.grant_type}</Badge>
+                    </td>
+                    <td className="py-3 px-4 text-muted">{item.file_name}</td>
+                    <td className="py-3 px-4">
+                      <Badge variant="success">{item.status}</Badge>
+                    </td>
+                    <td className="py-3 px-4 text-muted">
+                      {new Date(item.submitted_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-4 flex gap-3">
+              <Button variant="primary" onClick={() => navigate('/applicant/proposals/new')}>
+                Apply for Proposal
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/')}>
+                Express More Interest
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* My Proposals Section */}
       <Card title="My Proposals" subtitle="Recent proposal submissions and drafts">

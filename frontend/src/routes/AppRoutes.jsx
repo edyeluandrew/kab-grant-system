@@ -38,12 +38,14 @@ const UploadDocuments = lazy(() => import('../pages/applicant/UploadDocuments'))
 const ProjectTeamMembers = lazy(() => import('../pages/applicant/ProjectTeamMembers'));
 const ApplicantNotifications = lazy(() => import('../pages/applicant/Notifications'));
 const ApplicantSettings = lazy(() => import('../pages/applicant/Settings'));
+const ExpressInterest = lazy(() => import('../pages/applicant/ExpressInterest'));
 
 // ─── LAZY LOAD: Admin pages ───────────────────────────────────────────────
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
 const Users = lazy(() => import('../pages/admin/Users'));
 const Reviewers = lazy(() => import('../pages/admin/Reviewers'));
 const GrantCalls = lazy(() => import('../pages/admin/GrantCalls'));
+const GrantCallInterests = lazy(() => import('../pages/admin/GrantCallInterests'));
 const SubmittedProposals = lazy(() => import('../pages/admin/proposals/SubmittedProposals'));
 const ScheduledProposals = lazy(() => import('../pages/admin/proposals/ScheduledProposals'));
 const ReviewedProposals = lazy(() => import('../pages/admin/proposals/ReviewedProposals'));
@@ -150,6 +152,11 @@ export default function AppRoutes() {
           <LazyWrapper component={ApplicantSettings} role="applicant" />
         </ProtectedRoute>
       } />
+      <Route path="/applicant/grant-calls/:callId/interest" element={
+        <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.APPLICANT]}>
+          <LazyWrapper component={ExpressInterest} role="applicant" />
+        </ProtectedRoute>
+      } />
       <Route path="/applicant/change-password" element={
         <ProtectedRoute allowedRoles={[ROLES.STAFF, ROLES.APPLICANT]}>
           <ChangePassword />
@@ -175,6 +182,11 @@ export default function AppRoutes() {
       <Route path="/admin/grant-calls" element={
         <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.SGO_ADMIN]}>
           <LazyWrapper component={GrantCalls} role="admin" />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/grant-calls/:callId/interests" element={
+        <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN, ROLES.SGO_ADMIN]}>
+          <LazyWrapper component={GrantCallInterests} role="admin" />
         </ProtectedRoute>
       } />
       <Route path="/admin/proposals/submitted" element={

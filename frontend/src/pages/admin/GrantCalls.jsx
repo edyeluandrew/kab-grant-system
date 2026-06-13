@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -246,6 +247,18 @@ export default function GrantCalls() {
       label: 'Status',
       render: (row) => (
         <Badge variant={statusVariant[row.status] || 'default'}>{row.status}</Badge>
+      ),
+    },
+    {
+      key: 'interests',
+      label: 'Interests',
+      render: (row) => (
+        <Link
+          to={`/admin/grant-calls/${row.id}/interests`}
+          className="text-primary text-sm font-medium hover:underline"
+        >
+          {row.interest_count ?? 0} submitted
+        </Link>
       ),
     },
     {

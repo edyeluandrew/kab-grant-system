@@ -55,3 +55,6 @@ export const ROLE_DASHBOARD_PATHS = {
   [ROLES.STAFF]: '/applicant/dashboard',
   [ROLES.APPLICANT]: '/applicant/dashboard',
 };
+
+/** Roles that can express interest and submit proposals */
+export const APPLICANT_ROLES = [ROLES.STAFF, ROLES.APPLICANT];

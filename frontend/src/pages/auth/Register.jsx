@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { registerUser } from '../../api/authApi';
 import { getFaculties, getDepartments } from '../../api/referenceApi';
 import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -52,6 +52,8 @@ const selectStyle = `
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
   const [faculties, setFaculties] = useState([]);
   const [departments, setDepartments] = useState([]);
 
@@ -124,7 +126,9 @@ export default function Register() {
     try {
       await registerUser(form);
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 2500);
+      setTimeout(() => {
+        navigate(redirectTo ? `/login?redirect=${encodeURIComponent(redirectTo)}` : '/login');
+      }, 2500);
     } catch (err) {
       const detail = err.response?.data?.detail;
       if (typeof detail === 'string') {

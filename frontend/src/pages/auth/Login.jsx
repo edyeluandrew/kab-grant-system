@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { loginUser, getMe } from '../../api/authApi';
+import { APPLICANT_ROLES } from '../../constants/roles';
 import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const { login, redirectPathForRole } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -58,6 +61,8 @@ export default function Login() {
       if (loginData.must_change_password) {
         console.log('⚠️ User must change password, redirecting to /change-password');
         navigate('/change-password', { replace: true });
+      } else if (redirectTo && APPLICANT_ROLES.includes(fullUserData.role)) {
+        navigate(redirectTo, { replace: true });
       } else {
         console.log('✅ Navigating to:', redirectPath);
         navigate(redirectPath, { replace: true });
@@ -186,7 +191,11 @@ export default function Login() {
           <div className="mt-6 text-center space-y-2">
             <p className="text-sm" style={{ color: '#7A8793' }}>
               Don't have an account?{' '}
-              <Link to="/register" className="font-medium hover:underline" style={{ color: '#0078B8' }}>
+              <Link
+                to={redirectTo ? `/register?redirect=${encodeURIComponent(redirectTo)}` : '/register'}
+                className="font-medium hover:underline"
+                style={{ color: '#0078B8' }}
+              >
                 Register here
               </Link>
             </p>
