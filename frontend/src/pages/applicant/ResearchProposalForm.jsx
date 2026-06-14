@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Save, Eye, CheckCircle2, ArrowLeft } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
+import PageLoader from '../../components/common/PageLoader';
 import { createProposalDraft, updateProposalDraft, getProposalDetails } from '../../api/applicantApi';
 import { getFaculties, getDepartments, getResearchDisciplines, getGrantCalls } from '../../api/referenceApi';
+import { mapApiToResearchForm } from '../../utils/proposalMapper';
+import { getApiError } from '../../utils/apiError';
+import {
+  validateUploadFile,
+  UPLOAD_ACCEPT_ATTR,
+  MAX_UPLOAD_BYTES,
+  ALLOWED_UPLOAD_EXTENSIONS,
+} from '../../utils/fileUploadUtils';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
+import { findGrantCallById } from '../../utils/grantCallDocuments';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 import { createAutosaveManager } from '../../utils/autosave';
 import {
@@ -47,14 +58,17 @@ const WORD_LIMITS = {
 
 export default function ResearchProposalForm({ isEdit = false }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { id: proposalId } = useParams();
+  const isEditMode = isEdit || pathname.includes('/edit/');
   const autosaveManagerRef = useRef(null);
-  const [loading, setLoading] = useState(isEdit ? true : false);
+  const [loading, setLoading] = useState(isEditMode && proposalId ? true : false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [errors, setErrors] = useState({});
   const [autosaveStatus, setAutosaveStatus] = useState(''); // 'saving', 'saved', ''
   const [hasAutosavedDraft, setHasAutosavedDraft] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Dropdown loading states
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
@@ -104,6 +118,16 @@ export default function ResearchProposalForm({ isEdit = false }) {
     references: '',
     totalBudget: '',
 
+    // File Uploads
+    ganttChart: null,
+    budgetFile: null,
+    nationalIdCopy: null,
+    letterOfConfirmation: null,
+    teamCVs: null,
+    consentForms: null,
+    researchInstruments: null,
+    conceptPaperFile: null,
+
     // Compliance
     compliance: false,
   };
@@ -113,55 +137,24 @@ export default function ResearchProposalForm({ isEdit = false }) {
   // Load reference data and restore autosaved draft on mount
   useEffect(() => {
     // Initialize autosave manager with appropriate key based on mode
-    const autosaveKey = isEdit && proposalId 
+    const autosaveKey = isEditMode && proposalId 
       ? `kab_research_proposal_edit_${proposalId}`
       : 'kab_research_proposal_draft';
     autosaveManagerRef.current = createAutosaveManager(autosaveKey, defaultFormData);
 
     // Load proposal data if in edit mode
-    if (isEdit && proposalId) {
+    if (isEditMode && proposalId) {
       const loadProposalData = async () => {
         try {
           const proposal = await getProposalDetails(proposalId);
-          // Populate form with proposal data
+          const [depts, disciplinesData] = await Promise.all([
+            proposal.pi_faculty_id ? getDepartments(proposal.pi_faculty_id) : Promise.resolve([]),
+            getResearchDisciplines(),
+          ]);
+          setDepartments(depts);
           setFormData((prev) => ({
             ...prev,
-            projectTitle: proposal.title || proposal.projectTitle || '',
-            piFirstName: proposal.piFirstName || '',
-            piLastName: proposal.piLastName || '',
-            piQualifications: proposal.piQualifications || '',
-            piQualificationsOther: proposal.piQualificationsOther || '',
-            piSex: proposal.piSex || '',
-            piDesignation: proposal.piDesignation || '',
-            piDesignationOther: proposal.piDesignationOther || '',
-            faculty: proposal.faculty || '',
-            department: proposal.department || '',
-            specialization: proposal.specialization || '',
-            piEmail: proposal.piEmail || '',
-            piPhone: proposal.piPhone || '',
-            researchType: proposal.researchType || '',
-            researchTypeOther: proposal.researchTypeOther || '',
-            grantCall: proposal.grantCall || '',
-            summary: proposal.summary || '',
-            problemStatement: proposal.problemStatement || '',
-            proposedSolution: proposal.proposedSolution || '',
-            relevance: proposal.relevance || '',
-            innovativeness: proposal.innovativeness || '',
-            mainObjective: proposal.mainObjective || '',
-            specificObjectives: proposal.specificObjectives || '',
-            methods: proposal.methods || '',
-            outcomes: proposal.outcomes || '',
-            dissemination: proposal.dissemination || '',
-            policyImpact: proposal.policyImpact || '',
-            scalability: proposal.scalability || '',
-            sustainability: proposal.sustainability || '',
-            genderConsiderations: proposal.genderConsiderations || '',
-            ethicalImpact: proposal.ethicalImpact || '',
-            capacityBuilding: proposal.capacityBuilding || '',
-            conflictOfInterest: proposal.conflictOfInterest || '',
-            references: proposal.references || '',
-            totalBudget: proposal.totalBudget || '',
-            compliance: proposal.compliance || false,
+            ...mapApiToResearchForm(proposal, { departments: depts, disciplines: disciplinesData }),
           }));
         } catch (err) {
           setError(err.message || 'Failed to load proposal');
@@ -190,16 +183,21 @@ export default function ResearchProposalForm({ isEdit = false }) {
         ]);
         setFaculties(facultiesData);
         setDisciplines(disciplinesData);
-        setGrantCalls(grantCallsData);
+        setGrantCalls(grantCallsData || []);
+        console.log('[ResearchProposalForm] grant calls loaded:', grantCallsData);
+        if (!grantCallsData?.length) {
+          console.warn('No open grant calls available for dropdown.');
+        }
       } catch (err) {
         console.error('Error loading dropdown data:', err);
+        setError(err.message || 'Failed to load grant calls. Please refresh or contact the administrator.');
       } finally {
         setLoadingDropdowns(false);
       }
     };
 
     loadDropdownData();
-  }, [isEdit, proposalId]);
+  }, [isEditMode, proposalId]);
 
   // Load departments when faculty changes
   useEffect(() => {
@@ -219,16 +217,27 @@ export default function ResearchProposalForm({ isEdit = false }) {
   }, [formData.faculty]);
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const updated = {
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value,
-    };
+    const { name, value, type, checked, files } = e.target;
+    let updated;
+
+    if (type === 'file') {
+      // Handle file input
+      updated = {
+        ...formData,
+        [name]: files && files.length > 0 ? files[0] : null,
+      };
+    } else {
+      // Handle regular input
+      updated = {
+        ...formData,
+        [name]: type === 'checkbox' ? checked : value,
+      };
+    }
     
     setFormData(updated);
     
-    // Autosave the form data silently (debounced by autosave manager)
-    if (autosaveManagerRef.current) {
+    // Autosave the form data silently (debounced by autosave manager) - exclude files
+    if (autosaveManagerRef.current && type !== 'file') {
       autosaveManagerRef.current.save(updated);
     }
     
@@ -365,6 +374,20 @@ export default function ResearchProposalForm({ isEdit = false }) {
       newErrors.totalBudget = validateBudget(formData.totalBudget);
     }
 
+    // Attachments are uploaded on the documents page after saving the draft.
+    if (isSubmitting) {
+      const fileFields = [
+        'ganttChart', 'budgetFile', 'nationalIdCopy', 'letterOfConfirmation',
+        'teamCVs', 'consentForms', 'researchInstruments', 'conceptPaperFile',
+      ];
+      fileFields.forEach((field) => {
+        if (formData[field]) {
+          const fileError = validateUploadFile(formData[field]);
+          if (fileError) newErrors[field] = fileError;
+        }
+      });
+    }
+
     // Compliance only for submission
     if (isSubmitting && !formData.compliance) {
       newErrors.compliance = 'You must confirm compliance before continuing';
@@ -388,30 +411,28 @@ export default function ResearchProposalForm({ isEdit = false }) {
       setLoading(true);
       setError(null);
       
-      let result;
-      if (isEdit && proposalId) {
-        // Update existing proposal
-        result = await updateProposalDraft(proposalId, formData);
-        // Clear edit autosave after successful save
+      const mapperOptions = { departments, disciplines };
+      let savedId = proposalId;
+      if (isEditMode && proposalId) {
+        await updateProposalDraft(proposalId, formData, mapperOptions);
         if (autosaveManagerRef.current) {
           autosaveManagerRef.current.clear();
         }
       } else {
-        // Create new proposal
-        result = await createProposalDraft(formData);
-        // Clear create autosave after successful save
+        const created = await createProposalDraft(formData, mapperOptions);
+        savedId = created.id;
         if (autosaveManagerRef.current) {
           autosaveManagerRef.current.clear();
         }
       }
-      
+
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        navigate('/applicant/proposals');
-      }, 2000);
+        navigate(`/applicant/proposals/${savedId}/documents`);
+      }, 1500);
     } catch (err) {
-      setError(err.message || 'Failed to save draft');
+      setError(getApiError(err, 'Failed to save draft'));
     } finally {
       setLoading(false);
     }
@@ -420,31 +441,53 @@ export default function ResearchProposalForm({ isEdit = false }) {
   const handleSubmitProposal = async (e) => {
     e.preventDefault();
 
-    const newErrors = validateForm(true);
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setError('Please fix all errors before submitting');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    try {
-      setLoading(true);
+    if (!showPreview) {
+      // Stage 1: Validate and enter preview
+      const newErrors = validateForm(true);
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        setError('Please fix all errors before proceeding');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
       setError(null);
-      // Navigate to review page with proposal data
-      navigate('/applicant/proposals/review', {
-        state: {
-          proposalData: formData,
-          proposalType: 'research',
-          isEdit: isEdit,
-          proposalId: proposalId,
-        },
-      });
-    } catch (err) {
-      setError(err.message || 'Failed to proceed to review');
-    } finally {
-      setLoading(false);
+      setShowPreview(true);
+    } else {
+      // Stage 2: Actually submit
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const mapperOptions = { departments, disciplines };
+        let savedId = proposalId;
+        if (isEditMode && proposalId) {
+          await updateProposalDraft(proposalId, formData, mapperOptions);
+        } else {
+          const created = await createProposalDraft(formData, mapperOptions);
+          savedId = created.id;
+        }
+
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          navigate(`/applicant/proposals/${savedId}/documents`);
+        }, 1500);
+      } catch (err) {
+        setError(getApiError(err, 'Failed to save proposal'));
+      } finally {
+        setLoading(false);
+      }
     }
+  };
+
+  const handleBackToEdit = () => {
+    setShowPreview(false);
+  };
+
+  const handleCancel = () => {
+    setShowPreview(false);
+    setErrors({});
+    setError(null);
   };
 
   const renderTextarea = (fieldName, label, placeholder, wordLimit) => {
@@ -577,13 +620,49 @@ export default function ResearchProposalForm({ isEdit = false }) {
     );
   };
 
-  if (loadingDropdowns) return <Loader />;
+  const renderFileInput = (fieldName, label, acceptedFormats, maxSize) => {
+    const file = formData[fieldName];
+    const formatString = acceptedFormats.join(', ');
+    const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(1);
+
+    return (
+      <div>
+        <label className="block text-sm font-medium text-textMain mb-2">
+          {label}
+        </label>
+        <div className={`w-full px-3 py-2 border-2 border-dashed rounded-md outline-none focus-within:ring-2 ${
+          errors[fieldName]
+            ? 'border-danger focus-within:ring-danger'
+            : 'border-border focus-within:ring-accent focus-within:border-accent'
+        }`}>
+          <input
+            type="file"
+            name={fieldName}
+            onChange={handleInputChange}
+            accept={UPLOAD_ACCEPT_ATTR}
+            className="w-full cursor-pointer"
+          />
+        </div>
+        <div className="text-xs text-muted mt-1">
+          Accepted: {formatString} (Max: {maxSizeMB}MB)
+        </div>
+        {file && (
+          <div className="text-xs text-success mt-2">
+            ✓ Selected: {file.name} ({(file.size / 1024).toFixed(1)}KB)
+          </div>
+        )}
+        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
+      </div>
+    );
+  };
+
+  if (loadingDropdowns || loading) return <PageLoader role="applicant" />;
 
   return (
     <DashboardLayout role="applicant">
       <PageHeader
-        title={isEdit ? 'Edit Research Proposal' : 'Submit Research Proposal'}
-        subtitle={isEdit ? 'Update your proposal details' : 'Complete the application form for your research project'}
+        title={isEditMode ? 'Edit Research Proposal' : 'Submit Research Proposal'}
+        subtitle={isEditMode ? 'Update your proposal details' : 'Complete the application form for your research project'}
       />
 
       {error && <Alert variant="danger" title="Error">{error}</Alert>}
@@ -622,36 +701,62 @@ export default function ResearchProposalForm({ isEdit = false }) {
               {renderSelectWithOther('researchType', 'Type of Research', typeOfResearchOptions, 'researchTypeOther')}
               {renderSelect('grantCall', 'Grant Call', grantCalls)}
             </div>
+            {formData.grantCall && (
+              <GrantCallDocumentsList
+                grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+                title="Grant Call Documents"
+                className="mt-2"
+              />
+            )}
           </div>
         </Card>
 
         {/* Section B: Project Description */}
         <Card title="B. Project Description">
           <div className="space-y-4">
-            {renderTextarea('summary', 'Project Summary (max 200 words)', 'Brief overview of the project', WORD_LIMITS.summary)}
-            {renderTextarea('problemStatement', 'Problem Statement (max 200 words)', 'What problem does this research address?', WORD_LIMITS.problemStatement)}
-            {renderTextarea('proposedSolution', 'Proposed Solution (max 200 words)', 'How will you solve the problem?', WORD_LIMITS.proposedSolution)}
-            {renderTextarea('relevance', 'Relevance to NDP IV / SDGs (max 300 words)', '', WORD_LIMITS.relevance)}
-            {renderTextarea('innovativeness', 'Innovativeness (max 200 words)', '', WORD_LIMITS.innovativeness)}
-            {renderTextarea('mainObjective', 'Main Objective', '', Infinity)}
-            {renderTextarea('specificObjectives', 'Specific Objectives', '', Infinity)}
-            {renderTextarea('methods', 'Methods Description (max 750 words)', 'Describe your research methodology', WORD_LIMITS.methods)}
-            {renderTextarea('outcomes', 'Outcomes / Impact / Outreach (max 250 words)', '', WORD_LIMITS.outcomes)}
-            {renderTextarea('dissemination', 'Translation / Dissemination Plan (max 250 words)', '', WORD_LIMITS.dissemination)}
-            {renderTextarea('policyImpact', 'Potential Policy or Program Impact (max 250 words)', '', WORD_LIMITS.policyImpact)}
-            {renderTextarea('scalability', 'Scalability (max 200 words)', '', WORD_LIMITS.scalability)}
-            {renderTextarea('sustainability', 'Sustainability (max 150 words)', '', WORD_LIMITS.sustainability)}
-            {renderTextarea('genderConsiderations', 'Gender Considerations (max 150 words)', '', WORD_LIMITS.genderConsiderations)}
-            {renderTextarea('ethicalImpact', 'Ethical / Environmental Impact (max 200 words)', '', WORD_LIMITS.ethicalImpact)}
-            {renderTextarea('capacityBuilding', 'Capacity Building (max 250 words)', '', WORD_LIMITS.capacityBuilding)}
-            {renderTextarea('conflictOfInterest', 'Conflict of Interest (max 150 words)', '', WORD_LIMITS.conflictOfInterest)}
-            {renderTextarea('references', 'References (max 250 words)', '', WORD_LIMITS.references)}
-            {renderInputField('totalBudget', 'Total Budget', 'number')}
+            {renderTextarea('summary', 'Project summary: A concise summary of what the project is about (maximum 200 words)*', '', WORD_LIMITS.summary)}
+            {renderTextarea('problemStatement', 'What is the problem you are trying to address? Clearly articulate the problem, i.e., the knowledge gap (for research-based projects) or the stakeholder need (for innovation-based projects), or the ecosystem/capacity need (for ecosystem enhancement-based projects). (200 Words max)*', '', WORD_LIMITS.problemStatement)}
+            {renderTextarea('proposedSolution', 'What is the proposed solution? Provide a summary of the proposed solution to address the problem described. This could be a research and innovation (R&I) ecosystem-building idea. (200 Words max)*', '', WORD_LIMITS.proposedSolution)}
+            {renderTextarea('relevance', 'Relevance: Clearly articulate the relevance of your proposed solution to the national priorities in the National Development Plan IV and/or the SDGs. (300 Words Max.)*', '', WORD_LIMITS.relevance)}
+            {renderTextarea('innovativeness', 'Innovativeness: For innovators, what is the innovation in your idea? What is the uniqueness of your proposed idea compared to the way things are currently being done? For researchers, what innovation will come from your research? (200 Words max)*', '', WORD_LIMITS.innovativeness)}
+            {renderTextarea('mainObjective', 'Main Objective: What is the overall objective of this project?*', '', Infinity)}
+            {renderTextarea('specificObjectives', 'Specific Objectives: What are the specific objectives?*', '', Infinity)}
+            {renderTextarea('methods', 'Description of the Methods: Describe the methods you will use to achieve the set objectives. For research-based projects, describe with sufficient detail but concisely stated: The (1) study entities/population, (2) Study design, (3) Sample size and Sampling considerations if any, (4) Data collection methods and tools, (5) the Variables to be assessed, (6) the Analysis to be conducted.(750 Words max)*', '', WORD_LIMITS.methods)}
+            {renderTextarea('outcomes', 'Outcomes/Impact/Outreach: State the primary (Direct) and secondary (Indirect) beneficiaries of this project. State the anticipated outputs of the project (the immediate outputs of the activities of the project) and the outcomes (the outcomes of achieving the results). State the anticipated impact of the project (Note: Impact might not be achievable in one year, in which case your one-year project only contributes to it). (250 Words max)*', '', WORD_LIMITS.outcomes)}
+            {renderTextarea('dissemination', 'Translation/Dissemination plan: Clearly articulate the knowledge management and dissemination plan for your project. Briefly describe the anticipated knowledge products/solutions to be developed from the project and the engagements to be undertaken to promote their uptake by the key audiences. For capacity enhancement projects, describe how the installed capacity will translate into increased/improved research services (250 Words max)*', '', WORD_LIMITS.dissemination)}
+            {renderTextarea('policyImpact', 'Potential impact on policy or programs: Briefly state the potential impact of your project on policy or how programs are implemented or how research is conducted. (250 Words max)*', '', WORD_LIMITS.policyImpact)}
+            {renderTextarea('scalability', 'Scalability: Describe the potential for scalability of your solution (either scalability as a social venture or public good, a policy, a technical approach, a technology for use, or a commercially viable product). Describe the scaling plan and potential scaling partners (industry linkage, implementing partners, and target user communities or how such linkages will be forged and expanded. (200 Words max)*', '', WORD_LIMITS.scalability)}
+            {renderTextarea('sustainability', 'Sustainability: If your project requires multi-year funding (beyond 1 year) or maintenance of equipment, indicate how the funding will be sustained after the initial year of funding. Indicate how you will leverage resources to take this work and the products from it further (150 Words max)*', '', WORD_LIMITS.sustainability)}
+            {renderTextarea('genderConsiderations', 'Gender Considerations: Briefly explain how your project will address gender issues and gender balance at all stages. (150 Words max)*', '', WORD_LIMITS.genderConsiderations)}
+            {renderTextarea('ethicalImpact', 'Ethical implications/Environmental Impact: Does your research involve human subjects? In what ways are human participants involved? What ethical issues are likely to arise from the study, and how will they be addressed or monitored? What protections are available for vulnerable groups? What certifications do you intend to attain, or have you attained? If your research involves animal subjects, in what ways are animal subjects involved, and how will the animals be protected? How will animal welfare be ensured? For research that involves changes to the physical environment, researchers should explain the measures to ensure minimal damage to the environment and to monitor and act on such damage. (200 Words max)*', '', WORD_LIMITS.ethicalImpact)}
+            {renderTextarea('capacityBuilding', 'Provision for capacity building: Describe briefly whether and how your project will build capacity for your unit or team members (250 Words max)*', '', WORD_LIMITS.capacityBuilding)}
+            {renderTextarea('conflictOfInterest', 'Declaration of conflict of interest: Declare if there are any competing interests or conflicts of interest. Describe the sources of conflict, if any. If there is no conflict of interest, indicate: \'None\'. (150 Words max)*', '', WORD_LIMITS.conflictOfInterest)}
+            {renderTextarea('references', 'References: List any key references used (250 Words max)*', '', WORD_LIMITS.references)}
+            {renderInputField('totalBudget', 'Total Budget: What is your total budget?*', 'number')}
           </div>
         </Card>
 
-        {/* Section C: Compliance Confirmation */}
-        <Card title="C. Compliance Confirmation">
+        {/* Section C: Attachments */}
+        <Card title="C. Attachments">
+          <div className="space-y-4">
+            <p className="text-sm text-muted mb-4">
+              Upload all required documents on the documents page after saving this draft (PDF or Word, max 10MB each).
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderFileInput('ganttChart', 'a) Gantt Chart (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('budgetFile', 'b) Budget File (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('nationalIdCopy', 'c) National ID Copy (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('letterOfConfirmation', 'd) Letter of Confirmation (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('teamCVs', 'e) Team CVs (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('consentForms', 'f) Consent Forms (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('researchInstruments', 'g) Research Instruments (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+              {renderFileInput('conceptPaperFile', 'h) Concept Paper (optional here)', ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES)}
+            </div>
+          </div>
+        </Card>
+
+        {/* Section D: Compliance Confirmation */}
+        <Card title="D. Compliance Confirmation">
           <div className="flex items-start gap-3">
             <input
               type="checkbox"
@@ -696,22 +801,64 @@ export default function ResearchProposalForm({ isEdit = false }) {
               </div>
             )}
             
-            <div className="flex gap-4 justify-end">
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={loading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSaveDraft(e);
-                }}
-              >
-                Save Draft
-              </Button>
-              <Button type="button" variant="primary" disabled={loading} onClick={handleSubmitProposal}>
-                {loading ? 'Processing...' : 'Submit Proposal'}
-              </Button>
-            </div>
+            {!showPreview ? (
+              <div className="flex gap-4 justify-end">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-textMain font-bold text-lg rounded-md transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleSaveDraft(e);
+                  }}
+                  className="px-8 py-4 bg-warning hover:bg-opacity-90 text-white font-bold text-lg rounded-md transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Save size={20} />
+                  Save Draft
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleSubmitProposal}
+                  className="px-8 py-4 bg-accent hover:bg-opacity-90 text-white font-bold text-lg rounded-md transition flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Eye size={20} />
+                  Preview & Submit
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-accent bg-opacity-10 border border-accent rounded-lg p-4 text-sm text-textMain">
+                  <p className="font-semibold mb-2">📋 Review your proposal before submitting</p>
+                  <p>Please review all the information below. You can go back to edit if needed.</p>
+                </div>
+                <div className="flex gap-4 justify-end">
+                  <button
+                    type="button"
+                    onClick={handleBackToEdit}
+                    className="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-textMain font-bold text-lg rounded-md transition flex items-center gap-2"
+                  >
+                    <ArrowLeft size={20} />
+                    Back to Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleSubmitProposal}
+                    className="px-8 py-4 bg-success hover:bg-opacity-90 text-white font-bold text-lg rounded-md transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={20} />
+                    Confirm & Submit
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       </form>

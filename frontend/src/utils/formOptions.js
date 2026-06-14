@@ -56,14 +56,18 @@ export const proposalStatusOptions = [
   { value: 'awarded', label: 'Awarded' },
 ];
 
+/**
+ * Backend AttachmentType enum values (exact strings sent as attachment_type).
+ * Labels use user-facing names where they differ from API values.
+ */
 export const attachmentTypeOptions = [
-  { value: 'main_proposal', label: 'Main Proposal Document', required: true },
-  { value: 'budget', label: 'Budget', required: true },
-  { value: 'work_plan', label: 'Work Plan / Gantt Chart', required: true },
-  { value: 'cvs', label: 'CVs', required: true },
-  { value: 'consent_forms', label: 'Consent Forms', required: true },
-  { value: 'national_id', label: 'National ID / NIN', required: true },
-  { value: 'confirmation_letter', label: 'Confirmation Letter', required: false },
-  { value: 'faculty_letter', label: 'Faculty Letter / Faculty Support Evidence', required: false },
-  { value: 'research_instruments', label: 'Research Instruments', required: false },
+  { value: 'Gantt Chart', label: 'Gantt Chart', required: true },
+  { value: 'Budget', label: 'Budget', required: true },
+  { value: 'National ID', label: 'National ID', required: true },
+  { value: 'Confirmation Letter', label: 'Letter of Confirmation', required: true },
+  { value: 'CVs', label: 'Team CVs', required: true },
+  { value: 'Consent Forms', label: 'Consent Forms', required: true },
+  { value: 'Research Instruments', label: 'Research Instruments', required: true },
+  { value: 'Faculty Support Evidence', label: 'Faculty Support Evidence', required: true },
+  { value: 'Full Proposal Document', label: 'Full Proposal Document', required: true },
 ];

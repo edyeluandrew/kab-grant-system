@@ -1,143 +1,164 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ExternalLink } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
-import { getProposalAttachments, uploadProposalAttachment } from '../../api/applicantApi';
-import { attachmentTypeOptions } from '../../utils/formOptions';
+import PageLoader from '../../components/common/PageLoader';
+import {
+  getProposalAttachments,
+  getProposalDetails,
+  uploadProposalAttachment,
+} from '../../api/applicantApi';
+import { countUploadedRequired } from '../../utils/attachmentUtils';
+import { getApiError } from '../../utils/apiError';
+import { getStatusLabel } from '../../utils/statusUtils';
+import { validateUploadFile, UPLOAD_ACCEPT_ATTR } from '../../utils/fileUploadUtils';
 
 export default function UploadDocuments() {
   const { id: proposalId } = useParams();
   const [attachments, setAttachments] = useState([]);
+  const [proposalStatus, setProposalStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [uploadingId, setUploadingId] = useState(null);
+  const [uploadingType, setUploadingType] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(null);
   const fileInputRefs = useRef({});
 
-  useEffect(() => {
-    const fetchAttachments = async () => {
-      try {
-        setLoading(true);
-        const data = await getProposalAttachments(proposalId);
-        setAttachments(data);
-        setError(null);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAttachments();
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [checklist, proposal] = await Promise.all([
+        getProposalAttachments(proposalId),
+        getProposalDetails(proposalId),
+      ]);
+      setAttachments(checklist);
+      setProposalStatus(proposal.status || '');
+    } catch (err) {
+      setError(getApiError(err, 'Failed to load documents'));
+    } finally {
+      setLoading(false);
+    }
   }, [proposalId]);
 
-  const handleChooseFile = (attachmentId) => {
-    if (fileInputRefs.current[attachmentId]) {
-      fileInputRefs.current[attachmentId].click();
-    }
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleChooseFile = (typeKey) => {
+    fileInputRefs.current[typeKey]?.click();
   };
 
-  const handleFileUpload = async (attachmentId, attachmentType, file) => {
+  const handleFileUpload = async (attachmentType, file) => {
     if (!file) return;
 
+    const validationError = validateUploadFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     try {
-      setUploadingId(attachmentId);
+      setUploadingType(attachmentType);
+      setError(null);
       await uploadProposalAttachment(proposalId, attachmentType, file);
       setUploadSuccess(`${file.name} uploaded successfully`);
       setTimeout(() => setUploadSuccess(null), 3000);
-
-      // Update attachment status in UI
-      setAttachments((prev) =>
-        prev.map((att) =>
-          att.id === attachmentId
-            ? {
-                ...att,
-                status: 'uploaded',
-                fileName: file.name,
-                uploadedAt: new Date().toISOString(),
-              }
-            : att
-        )
-      );
+      await loadData();
     } catch (err) {
-      setError(err.message);
+      setError(getApiError(err, 'Upload failed'));
     } finally {
-      setUploadingId(null);
+      setUploadingType(null);
     }
   };
 
-  if (loading) return <Loader />;
+  if (loading) return <PageLoader role="applicant" />;
 
-  const requiredCount = attachments.filter((a) => a.required && a.status === 'uploaded').length;
-  const requiredTotal = attachments.filter((a) => a.required).length;
+  const { uploaded, total } = countUploadedRequired(attachments);
 
   return (
     <DashboardLayout role="applicant">
       <PageHeader
         title="Upload Documents"
-        subtitle={`${requiredCount} of ${requiredTotal} required documents uploaded`}
+        subtitle={`${uploaded} of ${total} required documents uploaded`}
       />
+
+      {proposalStatus && (
+        <Alert variant="info">
+          Proposal status: <strong>{getStatusLabel(proposalStatus)}</strong>.
+          {proposalStatus === 'Submitted'
+            ? ' All required documents are uploaded and your proposal has been submitted.'
+            : ' Upload all 9 required document types to automatically submit your proposal.'}
+        </Alert>
+      )}
 
       {error && <Alert variant="danger">{error}</Alert>}
       {uploadSuccess && <Alert variant="success">{uploadSuccess}</Alert>}
 
-      <Card title="Required Attachments" subtitle="Upload all required documents for your proposal">
+      <Card title="Required Attachments" subtitle="PDF or Word only (.pdf, .doc, .docx), max 10MB each — all 9 types required">
         <div className="w-full overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 font-semibold text-textMain">Document Name</th>
-                <th className="text-left py-3 px-4 font-semibold text-textMain">Required</th>
+                <th className="text-left py-3 px-4 font-semibold text-textMain">Document</th>
                 <th className="text-left py-3 px-4 font-semibold text-textMain">Status</th>
-                <th className="text-left py-3 px-4 font-semibold text-textMain">File Name</th>
-                <th className="text-left py-3 px-4 font-semibold text-textMain">Upload</th>
+                <th className="text-left py-3 px-4 font-semibold text-textMain">File</th>
+                <th className="text-left py-3 px-4 font-semibold text-textMain">Actions</th>
               </tr>
             </thead>
             <tbody>
               {attachments.map((attachment) => (
-                <tr key={attachment.id} className="border-b border-border hover:bg-background">
+                <tr key={attachment.type} className="border-b border-border hover:bg-background">
                   <td className="py-3 px-4 text-textMain font-medium">{attachment.name}</td>
                   <td className="py-3 px-4">
-                    <Badge variant={attachment.required ? 'danger' : 'warning'}>
-                      {attachment.required ? 'Required' : 'Optional'}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge
-                      variant={attachment.status === 'uploaded' ? 'success' : 'warning'}
-                    >
+                    <Badge variant={attachment.status === 'uploaded' ? 'success' : 'warning'}>
                       {attachment.status === 'uploaded' ? 'Uploaded' : 'Pending'}
                     </Badge>
                   </td>
-                  <td className="py-3 px-4 text-textMain text-xs">{attachment.fileName || '-'}</td>
+                  <td className="py-3 px-4 text-textMain text-xs">
+                    {attachment.fileName ? (
+                      <a
+                        href={attachment.cloudinaryUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        {attachment.fileName}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
                   <td className="py-3 px-4">
                     <div className="flex gap-2 items-center">
                       <input
                         ref={(el) => {
-                          if (el) fileInputRefs.current[attachment.id] = el;
+                          if (el) fileInputRefs.current[attachment.type] = el;
                         }}
                         type="file"
+                        accept={UPLOAD_ACCEPT_ATTR}
                         className="hidden"
-                        onChange={(e) =>
-                          handleFileUpload(
-                            attachment.id,
-                            attachment.type,
-                            e.target.files?.[0]
-                          )
-                        }
+                        onChange={(e) => {
+                          handleFileUpload(attachment.type, e.target.files?.[0]);
+                          e.target.value = '';
+                        }}
                       />
                       <Button
                         size="sm"
                         variant="accent"
-                        onClick={() => handleChooseFile(attachment.id)}
-                        disabled={uploadingId === attachment.id}
+                        onClick={() => handleChooseFile(attachment.type)}
+                        disabled={uploadingType === attachment.type}
                       >
-                        {uploadingId === attachment.id ? 'Uploading...' : 'Choose'}
+                        {uploadingType === attachment.type
+                          ? 'Uploading...'
+                          : attachment.status === 'uploaded'
+                            ? 'Replace'
+                            : 'Upload'}
                       </Button>
                     </div>
                   </td>
@@ -148,22 +169,24 @@ export default function UploadDocuments() {
         </div>
       </Card>
 
-      {/* Progress Bar */}
       <Card>
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <p className="text-sm font-medium text-textMain">Upload Progress</p>
             <p className="text-sm font-bold text-primary">
-              {requiredCount}/{requiredTotal}
+              {uploaded}/{total}
             </p>
           </div>
           <div className="w-full bg-border rounded-full h-3">
             <div
               className="bg-primary rounded-full h-3 transition-all"
-              style={{
-                width: `${requiredTotal > 0 ? (requiredCount / requiredTotal) * 100 : 0}%`,
-              }}
-            ></div>
+              style={{ width: `${total > 0 ? (uploaded / total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="pt-2">
+            <Link to="/applicant/proposals" className="text-sm text-primary hover:underline">
+              ← Back to My Proposals
+            </Link>
           </div>
         </div>
       </Card>

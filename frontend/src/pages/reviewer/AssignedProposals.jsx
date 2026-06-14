@@ -17,12 +17,36 @@ export default function AssignedProposals() {
 
   useEffect(() => {
     getAssignedProposals()
-      .then(setProposals)
-      .catch((err) => setError(err.message))
+      .then((data) => {
+        console.log('Assigned proposals loaded:', data);
+        setProposals(data || []);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch assigned proposals:', err);
+        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load assigned proposals';
+        setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+        setProposals([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <DashboardLayout role="reviewer"><Loader /></DashboardLayout>;
+
+  if (error) {
+    return (
+      <DashboardLayout role="reviewer">
+        <PageHeader
+          title="Assigned Proposals"
+          subtitle="Proposals assigned to you for review"
+        />
+        <Alert variant="danger">
+          <strong>Failed to load proposals:</strong> {error}
+          <br/>
+          <small>Please check your connection and refresh the page.</small>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="reviewer">

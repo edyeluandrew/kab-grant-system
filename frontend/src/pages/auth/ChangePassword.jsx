@@ -41,7 +41,15 @@ export default function ChangePassword() {
         const updated = { ...user, must_change_password: false };
         login(updated);
       }
-      setTimeout(() => navigate('/reviewer/dashboard', { replace: true }), 2000);
+      
+      // Redirect based on role
+      const redirectPath = user?.role === 'reviewer' 
+        ? '/reviewer/dashboard'
+        : user?.role === 'applicant' || user?.role === 'staff'
+        ? '/applicant/settings'
+        : '/login';
+        
+      setTimeout(() => navigate(redirectPath, { replace: true }), 2000);
     } catch (err) {
       setError(err.message || 'Failed to change password.');
     } finally {

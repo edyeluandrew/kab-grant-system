@@ -12,6 +12,8 @@ import Loader from '../../../components/common/Loader';
 import Table from '../../../components/common/Table';
 import Modal from '../../../components/common/Modal';
 import { getScheduledProposals, removeReviewerFromProposal, setReviewDeadline, getReviewStatus } from '../../../api/adminApi';
+import { mapReviewStatusAssignments } from '../../../utils/reviewerUtils';
+import { getApiError } from '../../../utils/apiError';
 import { Calendar, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 export default function ScheduledProposals() {
@@ -39,9 +41,22 @@ export default function ScheduledProposals() {
       try {
         setLoading(true);
         const data = await getScheduledProposals();
-        setProposals(data);
+        const enriched = await Promise.all(
+          (data || []).map(async (proposal) => {
+            try {
+              const statusRows = await getReviewStatus(proposal.id);
+              return {
+                ...proposal,
+                assigned_reviewers: mapReviewStatusAssignments(statusRows),
+              };
+            } catch {
+              return { ...proposal, assigned_reviewers: [] };
+            }
+          })
+        );
+        setProposals(enriched);
       } catch (err) {
-        setError(err.message);
+        setError(getApiError(err, 'Failed to load scheduled proposals'));
       } finally {
         setLoading(false);
       }

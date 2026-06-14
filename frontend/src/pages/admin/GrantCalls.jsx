@@ -1,585 +1,462 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import Button from '../../components/common/Button';
+import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
-import Modal from '../../components/common/Modal';
+import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
-import { 
-  getGrantCalls, 
-  createGrantCall, 
-  updateGrantCall, 
-  toggleGrantCall, 
+import PageLoader from '../../components/common/PageLoader';
+import Table from '../../components/common/Table';
+import Badge from '../../components/common/Badge';
+import {
+  getGrantCalls,
+  createGrantCall,
+  updateGrantCall,
   deleteGrantCall,
   openApplicationWindow,
   closeApplicationWindow,
-} from '../../api/authApi';
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Calendar,
-  Lock,
-  Unlock,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  FileText,
-  X,
-  Save,
-} from 'lucide-react';
+} from '../../api/adminApi';
+import { cacheOpenGrantCallsForLanding } from '../../api/grantCallsApi';
+
+const emptyForm = {
+  title: '',
+  description: '',
+  grant_type: 'Research',
+  academic_year: new Date().getFullYear(),
+  opening_date: '',
+  closing_date: '',
+  max_budget: '',
+  openImmediately: true,
+};
+
+const statusVariant = {
+  Draft: 'warning',
+  Open: 'success',
+  Closed: 'danger',
+};
 
 export default function GrantCalls() {
-  const { user } = useAuth();
-  const [grants, setGrants] = useState([]);
+  const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [showModal, setShowModal] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [formData, setFormData] = useState(emptyForm);
+  const [formErrors, setFormErrors] = useState({});
   const [editingId, setEditingId] = useState(null);
-  const [selectedGrantId, setSelectedGrantId] = useState(null);
-  const [showWindowModal, setShowWindowModal] = useState(false);
-  const [windowAction, setWindowAction] = useState(null);
-
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    deadline: '',
-    application_window_open: '',
-    application_window_close: '',
-    academic_year: new Date().getFullYear(),
-    eligibility_requirements: [],
-    guidelines_file: null,
-  });
-
-  const [newRequirement, setNewRequirement] = useState('');
 
   useEffect(() => {
-    loadGrantCalls();
+    fetchCalls();
   }, []);
 
-  const loadGrantCalls = async () => {
+  const fetchCalls = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await getGrantCalls();
-      setGrants(data);
-      setError('');
+      setCalls(data || []);
+      cacheOpenGrantCallsForLanding(data || []);
     } catch (err) {
-      setError('Failed to load grant calls');
-      console.error(err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load grant calls';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      setCalls([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddRequirement = () => {
-    if (newRequirement.trim()) {
-      setFormData((prev) => ({
-        ...prev,
-        eligibility_requirements: [...prev.eligibility_requirements, newRequirement],
-      }));
-      setNewRequirement('');
-    }
-  };
-
-  const handleRemoveRequirement = (index) => {
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      eligibility_requirements: prev.eligibility_requirements.filter((_, i) => i !== index),
+      [name]: type === 'checkbox' ? checked : value,
     }));
+    if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
-  const handleOpenModal = (grant = null) => {
-    if (grant) {
-      setEditingId(grant.id);
-      setFormData({
-        title: grant.title,
-        description: grant.description,
-        deadline: grant.deadline,
-        application_window_open: grant.application_window_open || '',
-        application_window_close: grant.application_window_close || '',
-        academic_year: grant.academic_year,
-        eligibility_requirements: grant.eligibility_requirements || [],
-        guidelines_file: grant.guidelines_file || null,
-      });
-    } else {
-      setEditingId(null);
-      setFormData({
-        title: '',
-        description: '',
-        deadline: '',
-        application_window_open: '',
-        application_window_close: '',
-        academic_year: new Date().getFullYear(),
-        eligibility_requirements: [],
-        guidelines_file: null,
-      });
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.title.trim()) errors.title = 'Title is required';
+    if (!formData.grant_type) errors.grant_type = 'Grant type is required';
+    if (!formData.academic_year) errors.academic_year = 'Academic year is required';
+    if (!formData.opening_date) errors.opening_date = 'Opening date is required';
+    if (!formData.closing_date) errors.closing_date = 'Closing date is required';
+    if (
+      formData.opening_date &&
+      formData.closing_date &&
+      formData.closing_date <= formData.opening_date
+    ) {
+      errors.closing_date = 'Closing date must be after opening date';
     }
-    setShowModal(true);
+    return errors;
   };
 
-  const handleCloseModal = () => {
-    setShowModal(false);
+  const resetForm = () => {
+    setFormData(emptyForm);
+    setFormErrors({});
     setEditingId(null);
-    setNewRequirement('');
+    setFormError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.deadline) {
-      setError('Title and deadline are required');
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setFormError('Please fix the errors below.');
       return;
     }
 
+    const payload = {
+      title: formData.title.trim(),
+      description: formData.description.trim() || null,
+      grant_type: formData.grant_type,
+      academic_year: Number(formData.academic_year),
+      opening_date: formData.opening_date,
+      closing_date: formData.closing_date,
+      max_budget: formData.max_budget ? Number(formData.max_budget) : null,
+    };
+
     try {
-      setError('');
+      setFormLoading(true);
+      setFormError(null);
+
       if (editingId) {
-        const updated = await updateGrantCall(editingId, formData);
-        setGrants((prev) =>
-          prev.map((g) => (g.id === editingId ? updated : g))
-        );
-        setSuccess('Grant call updated successfully');
+        const updated = await updateGrantCall(editingId, payload);
+        setCalls((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+        setSuccess('Grant call updated successfully.');
       } else {
-        const newGrant = await createGrantCall(formData);
-        setGrants((prev) => [...prev, newGrant]);
-        setSuccess('Grant call created successfully');
+        const created = await createGrantCall(payload);
+        let finalCall = created;
+
+        if (formData.openImmediately && created.status === 'Draft') {
+          finalCall = await openApplicationWindow(created.id);
+        }
+
+        setCalls((prev) => {
+          const next = [finalCall, ...prev];
+          cacheOpenGrantCallsForLanding(next);
+          return next;
+        });
+        setSuccess(
+          formData.openImmediately
+            ? 'Grant call created and opened for applications. Applicants can now select it in their forms.'
+            : 'Grant call created as draft. Open it when you are ready to accept applications.'
+        );
       }
-      handleCloseModal();
-      setTimeout(() => setSuccess(''), 3000);
+
+      resetForm();
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
-      setError(err.message || 'Failed to save grant call');
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to save grant call';
+      setFormError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } finally {
+      setFormLoading(false);
     }
   };
 
-  const handleToggleActive = async (grant) => {
+  const handleEdit = (call) => {
+    setEditingId(call.id);
+    setFormData({
+      title: call.title,
+      description: call.description || '',
+      grant_type: call.grant_type,
+      academic_year: call.academic_year,
+      opening_date: call.opening_date,
+      closing_date: call.closing_date,
+      max_budget: call.max_budget || '',
+      openImmediately: false,
+    });
+    setFormErrors({});
+    setFormError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenWindow = async (callId) => {
     try {
-      await toggleGrantCall(grant.id);
-      setGrants((prev) =>
-        prev.map((g) =>
-          g.id === grant.id ? { ...g, is_active: !g.is_active } : g
-        )
-      );
-      setSuccess(`Grant call ${grant.is_active ? 'deactivated' : 'activated'}`);
-      setTimeout(() => setSuccess(''), 3000);
+      setActionLoading(callId);
+      const updated = await openApplicationWindow(callId);
+      setCalls((prev) => {
+        const next = prev.map((c) => (c.id === callId ? updated : c));
+        cacheOpenGrantCallsForLanding(next);
+        return next;
+      });
+      setSuccess('Application window opened. This grant call is now visible in applicant forms.');
+      setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      setError('Failed to update grant call');
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to open application window';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const handleDelete = async (grantId) => {
-    if (!window.confirm('Are you sure you want to delete this grant call?')) return;
+  const handleCloseWindow = async (callId) => {
     try {
-      await deleteGrantCall(grantId);
-      setGrants((prev) => prev.filter((g) => g.id !== grantId));
-      setSuccess('Grant call deleted successfully');
-      setTimeout(() => setSuccess(''), 3000);
+      setActionLoading(callId);
+      const updated = await closeApplicationWindow(callId);
+      setCalls((prev) => prev.map((c) => (c.id === callId ? updated : c)));
+      setSuccess('Application window closed.');
+      setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      setError('Failed to delete grant call');
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to close application window';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const handleOpenWindow = async (grantId) => {
+  const handleDelete = async (callId) => {
+    if (!window.confirm('Delete this draft grant call? This cannot be undone.')) return;
     try {
-      const updated = await openApplicationWindow(grantId);
-      setGrants((prev) =>
-        prev.map((g) => (g.id === grantId ? updated : g))
-      );
-      setSuccess('Application window opened');
-      setTimeout(() => setSuccess(''), 3000);
-      setShowWindowModal(false);
+      setActionLoading(callId);
+      await deleteGrantCall(callId);
+      setCalls((prev) => prev.filter((c) => c.id !== callId));
+      if (editingId === callId) resetForm();
+      setSuccess('Grant call deleted.');
+      setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      setError('Failed to open application window');
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to delete grant call';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const handleCloseWindow = async (grantId) => {
-    try {
-      const updated = await closeApplicationWindow(grantId);
-      setGrants((prev) =>
-        prev.map((g) => (g.id === grantId ? updated : g))
-      );
-      setSuccess('Application window closed');
-      setTimeout(() => setSuccess(''), 3000);
-      setShowWindowModal(false);
-    } catch (err) {
-      setError('Failed to close application window');
-    }
-  };
+  const columns = [
+    { key: 'title', label: 'Title' },
+    {
+      key: 'grant_type',
+      label: 'Type',
+      render: (row) => <Badge variant="info">{row.grant_type}</Badge>,
+    },
+    { key: 'academic_year', label: 'Academic Year', render: (row) => `AY ${row.academic_year}` },
+    {
+      key: 'dates',
+      label: 'Window',
+      render: (row) => (
+        <span className="text-sm">
+          {row.opening_date} → {row.closing_date}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => (
+        <Badge variant={statusVariant[row.status] || 'default'}>{row.status}</Badge>
+      ),
+    },
+    {
+      key: 'interests',
+      label: 'Interests',
+      render: (row) => (
+        <Link
+          to={`/admin/grant-calls/${row.id}/interests`}
+          className="text-primary text-sm font-medium hover:underline"
+        >
+          {row.interest_count ?? 0} submitted
+        </Link>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => (
+        <div className="flex flex-wrap gap-2">
+          {row.status === 'Draft' && (
+            <>
+              <Button
+                size="sm"
+                variant="success"
+                disabled={actionLoading === row.id}
+                onClick={() => handleOpenWindow(row.id)}
+              >
+                Open
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actionLoading === row.id}
+                onClick={() => handleEdit(row)}
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={actionLoading === row.id}
+                onClick={() => handleDelete(row.id)}
+              >
+                Delete
+              </Button>
+            </>
+          )}
+          {row.status === 'Open' && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={actionLoading === row.id}
+                onClick={() => handleEdit(row)}
+              >
+                Edit
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={actionLoading === row.id}
+                onClick={() => handleCloseWindow(row.id)}
+              >
+                Close
+              </Button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
 
-  const getWindowStatus = (grant) => {
-    const now = new Date();
-    const openDate = new Date(grant.application_window_open);
-    const closeDate = new Date(grant.application_window_close);
-
-    if (now < openDate) return { status: 'pending', label: 'Not Yet Open', color: 'text-warning' };
-    if (now > closeDate) return { status: 'closed', label: 'Closed', color: 'text-danger' };
-    return { status: 'open', label: 'Open', color: 'text-success' };
-  };
-
-  const daysUntilDeadline = (deadline) => {
-    const diff = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  };
+  if (loading) return <PageLoader role="admin" />;
 
   return (
-    <DashboardLayout role={user?.role}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-textMain">Grant Calls</h1>
-            <p className="text-muted mt-1">Create and manage research grant calls</p>
-          </div>
-          <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            New Grant Call
-          </Button>
-        </div>
+    <DashboardLayout role="admin">
+      <PageHeader
+        title="Grant Calls"
+        subtitle="Create and manage grant calls. Only Open calls appear in applicant proposal forms."
+      />
 
-        {/* Alerts */}
-        {error && <Alert variant="error">{error}</Alert>}
-        {success && <Alert variant="success">{success}</Alert>}
+      {error && <Alert variant="danger" title="Error">{error}</Alert>}
+      {success && <Alert variant="success" title="Success">{success}</Alert>}
 
-        {/* Grant Calls Grid */}
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-48 bg-surface rounded-lg animate-pulse" />
-            ))}
-          </div>
-        ) : grants.length === 0 ? (
-          <Card className="text-center py-12">
-            <Calendar className="w-12 h-12 text-muted mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-textMain mb-2">No Grant Calls</h3>
-            <p className="text-muted mb-6">Create your first grant call to get started</p>
-            <Button onClick={() => handleOpenModal()}>Create Grant Call</Button>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {grants.map((grant) => {
-              const windowStatus = getWindowStatus(grant);
-              const daysLeft = daysUntilDeadline(grant.deadline);
-
-              return (
-                <Card key={grant.id} className="relative">
-                  {/* Status Badge */}
-                  <div className="absolute top-4 right-4">
-                    <span
-                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                        grant.is_active
-                          ? 'bg-success/10 text-success'
-                          : 'bg-muted/10 text-muted'
-                      }`}
-                    >
-                      {grant.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-
-                  {/* Title & Description */}
-                  <h3 className="text-lg font-bold text-textMain mb-2 pr-24">{grant.title}</h3>
-                  <p className="text-muted text-sm mb-4">{grant.description}</p>
-
-                  {/* Key Info */}
-                  <div className="grid grid-cols-2 gap-4 mb-4 py-4 border-t border-b border-border">
-                    <div>
-                      <p className="text-xs text-muted">Deadline</p>
-                      <p className="text-sm font-semibold text-textMain">
-                        {grant.deadline}
-                      </p>
-                      <p className="text-xs text-warning mt-1">{daysLeft} days left</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted">Application Window</p>
-                      <p className={`text-sm font-semibold ${windowStatus.color}`}>
-                        {windowStatus.label}
-                      </p>
-                      <p className="text-xs text-muted mt-1">
-                        {grant.application_window_open} to {grant.application_window_close}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Eligibility Requirements */}
-                  {grant.eligibility_requirements && grant.eligibility_requirements.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold text-textMain mb-2">
-                        Eligibility Requirements
-                      </p>
-                      <ul className="space-y-1">
-                        {grant.eligibility_requirements.slice(0, 2).map((req, idx) => (
-                          <li key={idx} className="text-xs text-muted flex items-start gap-2">
-                            <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0 text-success" />
-                            {req}
-                          </li>
-                        ))}
-                        {grant.eligibility_requirements.length > 2 && (
-                          <li className="text-xs text-muted italic">
-                            +{grant.eligibility_requirements.length - 2} more
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenModal(grant)}
-                      className="flex-1 flex items-center justify-center gap-2"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedGrantId(grant.id);
-                        setWindowAction(windowStatus.status === 'open' ? 'close' : 'open');
-                        setShowWindowModal(true);
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2"
-                    >
-                      {windowStatus.status === 'open' ? (
-                        <>
-                          <Lock className="w-4 h-4" />
-                          Close Window
-                        </>
-                      ) : (
-                        <>
-                          <Unlock className="w-4 h-4" />
-                          Open Window
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleToggleActive(grant)}
-                      className="flex items-center justify-center gap-2"
-                    >
-                      {grant.is_active ? (
-                        <Lock className="w-4 h-4" />
-                      ) : (
-                        <Unlock className="w-4 h-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-danger hover:bg-danger/10"
-                      onClick={() => handleDelete(grant.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Create/Edit Modal */}
-      <Modal isOpen={showModal} onClose={handleCloseModal} title={editingId ? 'Edit Grant Call' : 'Create Grant Call'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-textMain mb-1">Title *</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, title: e.target.value }))
-              }
-              placeholder="e.g., Innovation Grant 2026"
-              className="w-full px-4 py-2 border border-border rounded-lg text-textMain focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-textMain mb-1">
-              Description *
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, description: e.target.value }))
-              }
-              placeholder="Describe the grant call objectives"
-              rows={3}
-              className="w-full px-4 py-2 border border-border rounded-lg text-textMain focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-1">
-                Application Opens *
-              </label>
-              <input
-                type="date"
-                value={formData.application_window_open}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    application_window_open: e.target.value,
-                  }))
-                }
-                className="w-full px-4 py-2 border border-border rounded-lg text-textMain focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-textMain mb-1">
-                Application Closes *
-              </label>
-              <input
-                type="date"
-                value={formData.application_window_close}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    application_window_close: e.target.value,
-                  }))
-                }
-                className="w-full px-4 py-2 border border-border rounded-lg text-textMain focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-          </div>
-
-          {/* Deadline */}
-          <div>
-            <label className="block text-sm font-medium text-textMain mb-1">
-              Final Deadline *
-            </label>
-            <input
-              type="date"
-              value={formData.deadline}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, deadline: e.target.value }))
-              }
-              className="w-full px-4 py-2 border border-border rounded-lg text-textMain focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
-
-          {/* Eligibility Requirements */}
-          <div>
-            <label className="block text-sm font-medium text-textMain mb-2">
-              Eligibility Requirements
-            </label>
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={newRequirement}
-                onChange={(e) => setNewRequirement(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddRequirement();
-                  }
-                }}
-                placeholder="Add a requirement"
-                className="flex-1 px-4 py-2 border border-border rounded-lg text-textMain focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <Button
-                type="button"
-                onClick={handleAddRequirement}
-                variant="outline"
-                size="sm"
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {formData.eligibility_requirements.length > 0 && (
-              <div className="space-y-2">
-                {formData.eligibility_requirements.map((req, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between bg-background p-2 rounded border border-border"
-                  >
-                    <p className="text-sm text-textMain">{req}</p>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRequirement(idx)}
-                      className="text-muted hover:text-danger"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+      <div className="grid grid-cols-1 gap-6">
+        <Card title={editingId ? 'Edit Grant Call' : 'Create New Grant Call'}>
+          {formError && <Alert variant="danger">{formError}</Alert>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Title *</label>
+                <input
+                  type="text"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-border rounded-md"
+                  placeholder="e.g. KAB-FIR 2026 Research Grant Call"
+                />
+                {formErrors.title && <p className="text-xs text-danger mt-1">{formErrors.title}</p>}
               </div>
-            )}
-          </div>
-
-          {/* Form Buttons */}
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCloseModal}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1 flex items-center justify-center gap-2">
-              <Save className="w-4 h-4" />
-              {editingId ? 'Update' : 'Create'} Grant Call
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Window Action Modal */}
-      <Modal
-        isOpen={showWindowModal}
-        onClose={() => setShowWindowModal(false)}
-        title={windowAction === 'open' ? 'Open Application Window' : 'Close Application Window'}
-      >
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-4 bg-primary/10 rounded-lg">
-            <AlertCircle className="w-5 h-5 text-primary shrink-0" />
-            <div>
-              <p className="font-semibold text-sm text-textMain">
-                {windowAction === 'open'
-                  ? 'Open the application window for this grant call?'
-                  : 'Close the application window for this grant call?'}
-              </p>
-              <p className="text-xs text-muted mt-1">
-                {windowAction === 'open'
-                  ? 'Applicants will be able to submit proposals.'
-                  : 'No new proposals can be submitted.'}
-              </p>
+              <div>
+                <label className="block text-sm font-medium mb-1">Grant Type *</label>
+                <select
+                  name="grant_type"
+                  value={formData.grant_type}
+                  onChange={handleInputChange}
+                  disabled={!!editingId}
+                  className="w-full px-3 py-2 border border-border rounded-md disabled:opacity-60"
+                >
+                  <option value="Research">Research</option>
+                  <option value="Innovation">Innovation</option>
+                </select>
+                {formErrors.grant_type && <p className="text-xs text-danger mt-1">{formErrors.grant_type}</p>}
+              </div>
             </div>
-          </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowWindowModal(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (windowAction === 'open') {
-                  handleOpenWindow(selectedGrantId);
-                } else {
-                  handleCloseWindow(selectedGrantId);
-                }
-              }}
-              className="flex-1"
-            >
-              {windowAction === 'open' ? 'Open Window' : 'Close Window'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                rows={3}
+                className="w-full px-3 py-2 border border-border rounded-md"
+                placeholder="Brief description of this grant call"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Academic Year *</label>
+                <input
+                  type="number"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-border rounded-md"
+                />
+                {formErrors.academic_year && <p className="text-xs text-danger mt-1">{formErrors.academic_year}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Opening Date *</label>
+                <input
+                  type="date"
+                  name="opening_date"
+                  value={formData.opening_date}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-border rounded-md"
+                />
+                {formErrors.opening_date && <p className="text-xs text-danger mt-1">{formErrors.opening_date}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Closing Date *</label>
+                <input
+                  type="date"
+                  name="closing_date"
+                  value={formData.closing_date}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-border rounded-md"
+                />
+                {formErrors.closing_date && <p className="text-xs text-danger mt-1">{formErrors.closing_date}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Max Budget (UGX)</label>
+                <input
+                  type="number"
+                  name="max_budget"
+                  value={formData.max_budget}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-border rounded-md"
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+
+            {!editingId && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="openImmediately"
+                  checked={formData.openImmediately}
+                  onChange={handleInputChange}
+                  className="rounded"
+                />
+                Open for applications immediately (shows in applicant form dropdown)
+              </label>
+            )}
+
+            <div className="flex gap-3">
+              <Button type="submit" disabled={formLoading}>
+                {formLoading ? 'Saving...' : editingId ? 'Update Grant Call' : 'Create Grant Call'}
+              </Button>
+              {editingId && (
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Cancel Edit
+                </Button>
+              )}
+            </div>
+          </form>
+        </Card>
+
+        <Card title="All Grant Calls">
+          {calls.length === 0 ? (
+            <p className="text-muted text-sm">No grant calls yet. Create one above to get started.</p>
+          ) : (
+            <Table columns={columns} data={calls} />
+          )}
+        </Card>
+      </div>
     </DashboardLayout>
   );
 }

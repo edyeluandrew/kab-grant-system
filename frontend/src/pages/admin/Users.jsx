@@ -25,11 +25,14 @@ export default function Users() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const data = await getUsers();
-      setUsers(data);
       setError(null);
+      const data = await getUsers();
+      setUsers(data || []);
     } catch (err) {
-      setError(err.message);
+      console.error('Failed to fetch users:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load users';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      setUsers([]);
     } finally {
       setLoading(false);
     }

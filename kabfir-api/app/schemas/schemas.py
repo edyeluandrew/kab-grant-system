@@ -243,7 +243,7 @@ class AttachmentResponse(BaseModel):
     id: int
     attachment_type: AttachmentType
     file_name: str
-    cloudinary_url: str
+    file_url: str              # ← matches the model
     uploaded_at: datetime
 
     model_config = {"from_attributes": True}
@@ -461,8 +461,33 @@ class GrantCallResponse(BaseModel):
     max_budget: Optional[Decimal]
     status: str
     created_at: datetime
+    interest_count: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+
+class GrantCallInterestResponse(BaseModel):
+    id: int
+    grant_call_id: int
+    grant_call_title: str
+    grant_type: str
+    grant_call_status: str
+    file_name: str
+    document_url: str
+    status: str
+    submitted_at: datetime
+
+
+class AdminGrantCallInterestResponse(BaseModel):
+    id: int
+    grant_call_id: int
+    user_id: int
+    first_name: str
+    surname: str
+    email: str
+    file_name: str
+    document_url: str
+    submitted_at: datetime
 
 
 # ─────────────────────────────────────────

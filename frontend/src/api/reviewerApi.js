@@ -1,172 +1,125 @@
 import axiosClient from './axiosClient';
+import {
+  getSubmittedProposalIds,
+  markProposalReviewSubmitted,
+  saveReviewSnapshot,
+  pushReviewMeta,
+} from '../utils/reviewerUtils';
 
-const delay = (ms = 600) => new Promise((res) => setTimeout(res, ms));
+// ─── Assigned Proposals ────────────────────────────────────────────────────────
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const mockAssignedProposals = [
-  {
-    id: 101,
-    protocol_no: 'PR2026/PROPOSAL/001',
-    title: 'AI-Based Malaria Detection in Rural Uganda',
-    grant_type: 'Research',
-    pi_first_name: 'Jane',
-    pi_last_name: 'Omondi',
-    pi_email: 'j.omondi@kab.ac.ug',
-    pi_faculty: 'Faculty of Computing and Informatics',
-    pi_department: 'Computer Science',
-    status: 'Scheduled for Review',
-    academic_year: 2026,
-    total_budget: 15000000,
-    project_summary: 'This research proposes an AI-driven diagnostic tool to detect malaria from blood smear images using convolutional neural networks, targeting low-resource rural health facilities in Uganda.',
-    problem_statement: 'Malaria remains a leading cause of death in rural Uganda due to delayed diagnosis caused by lack of skilled laboratory technicians.',
-    proposed_solution: 'Deploy a mobile-based AI model trained on malaria blood smear datasets to assist community health workers in rapid diagnosis.',
-    methods_description: 'Mixed methods: dataset collection from regional hospitals, CNN model training using TensorFlow, field testing in 3 districts over 6 months.',
-    review_submitted: false,
-    team_members: [
-      { id: 1, first_name: 'Paul', last_name: 'Kato', qualification: 'PhD', designation: 'Co-Investigator', email: 'p.kato@kab.ac.ug' },
-    ],
-    attachments: [
-      { id: 1, attachment_type: 'Full Proposal Document', file_name: 'proposal_malaria_ai.pdf', cloudinary_url: '#' },
-      { id: 2, attachment_type: 'Budget', file_name: 'budget.pdf', cloudinary_url: '#' },
-    ],
-  },
-  {
-    id: 102,
-    protocol_no: 'PR2026/PROPOSAL/002',
-    title: 'Solar-Powered Water Purification for Kigezi Highlands',
-    grant_type: 'Innovation',
-    pi_first_name: 'Robert',
-    pi_last_name: 'Tumwebaze',
-    pi_email: 'r.tumwebaze@kab.ac.ug',
-    pi_faculty: 'Faculty of Engineering',
-    pi_department: 'Environmental Engineering',
-    status: 'Scheduled for Review',
-    academic_year: 2026,
-    total_budget: 22000000,
-    project_summary: 'A low-cost solar-powered water purification system designed for communities in the Kigezi highlands with limited access to clean water.',
-    problem_statement: 'Over 60% of communities in the Kigezi highlands lack access to safe drinking water, leading to high rates of waterborne diseases.',
-    proposed_solution: 'Design and deploy solar-powered UV purification units that can be maintained locally with minimal technical skills.',
-    methods_description: 'Prototype design, pilot deployment in 2 villages, water quality testing before and after, community training sessions.',
-    review_submitted: true,
-    team_members: [],
-    attachments: [
-      { id: 3, attachment_type: 'Full Proposal Document', file_name: 'solar_water_proposal.pdf', cloudinary_url: '#' },
-    ],
-  },
-];
-
-const REVIEWS_KEY = 'kab_reviewer_reviews';
-
-const getStoredReviews = () => {
-  try {
-    const s = localStorage.getItem(REVIEWS_KEY);
-    return s ? JSON.parse(s) : [];
-  } catch { return []; }
-};
-
-const saveReviews = (reviews) => localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
-
-// ─── API Functions ─────────────────────────────────────────────────────────────
-
+/**
+ * Get all proposals assigned to the logged-in reviewer.
+ * GET /api/v1/reviewer/proposals
+ * Returns array of full proposal details with all fields
+ */
 export const getAssignedProposals = async () => {
-  try {
-    const response = await axiosClient.get('/reviewer/proposals');
-    return response.data;
-  } catch (apiError) {
-    console.warn('Using mock assigned proposals (API unavailable)', apiError.message);
-    await delay();
-    const reviews = getStoredReviews();
-    return mockAssignedProposals.map((p) => ({
-      ...p,
-      review_submitted: reviews.some((r) => r.proposal_id === p.id),
-    }));
-  }
+  const response = await axiosClient.get('/reviewer/proposals');
+  const submittedIds = new Set(getSubmittedProposalIds());
+  return (response.data || []).map((p) => ({
+    ...p,
+    review_submitted: submittedIds.has(p.id),
+  }));
 };
 
-export const getAssignedProposalDetail = async (id) => {
-  try {
-    const response = await axiosClient.get(`/reviewer/proposals/${id}`);
-    return response.data;
-  } catch (apiError) {
-    console.warn('Using mock proposal detail (API unavailable)', apiError.message);
-    await delay();
-    const proposal = mockAssignedProposals.find((p) => p.id === Number(id));
-    if (!proposal) throw new Error('Proposal not found or not assigned to you.');
-    const reviews = getStoredReviews();
-    return {
-      ...proposal,
-      review_submitted: reviews.some((r) => r.proposal_id === proposal.id),
-      my_review: reviews.find((r) => r.proposal_id === proposal.id) || null,
-    };
-  }
+/**
+ * Get full details of a single assigned proposal.
+ * GET /api/v1/reviewer/proposals/{proposal_id}
+ */
+export const getAssignedProposalDetail = async (proposalId) => {
+  const response = await axiosClient.get(`/reviewer/proposals/${proposalId}`);
+  const submittedIds = new Set(getSubmittedProposalIds());
+  return {
+    ...response.data,
+    review_submitted: submittedIds.has(Number(proposalId)),
+  };
 };
 
+// ─── Review Submission ────────────────────────────────────────────────────────
+
+/**
+ * Submit a review report for an assigned proposal.
+ * POST /api/v1/reviewer/proposals/{proposal_id}/review
+ * Body (multipart/form-data):
+ *   - recommendation: "Approve" | "Minor Revisions" | "Major Revisions" | "Reject" (required)
+ *   - score: integer (optional)
+ *   - comments: string (optional)
+ *   - report_file: File (optional)
+ * Returns: { id, recommendation, score, comments, report_file_url, submitted_at }
+ */
 export const submitReview = async (proposalId, payload) => {
-  try {
-    const formData = new FormData();
-    formData.append('score', payload.score || 5);
-    formData.append('recommendation', payload.recommendation);
-    if (payload.comments) formData.append('comments', payload.comments);
-    if (payload.report_file) formData.append('report_file', payload.report_file);
-    
-    const response = await axiosClient.post(`/reviewer/proposals/${proposalId}/review`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    return response.data;
-  } catch (apiError) {
-    console.warn('Using mock submit review (API unavailable)', apiError.message);
-    await delay(800);
-    const reviews = getStoredReviews();
-    if (reviews.some((r) => r.proposal_id === proposalId)) {
-      throw new Error('You have already submitted a review for this proposal.');
-    }
-    const newReview = {
-      id: Date.now(),
-      proposal_id: proposalId,
-      score: payload.score || 5,
-      recommendation: payload.recommendation,
-      comments: payload.comments || '',
-      report_file_url: payload.report_file ? '#' : null,
-      submitted_at: new Date().toISOString(),
-    };
-    reviews.push(newReview);
-    saveReviews(reviews);
-    return newReview;
+  const formData = new FormData();
+  formData.append('recommendation', payload.recommendation);
+  
+  if (payload.score !== undefined && payload.score !== null) {
+    formData.append('score', payload.score);
   }
+  if (payload.comments) {
+    formData.append('comments', payload.comments);
+  }
+  if (payload.report_file) {
+    formData.append('report_file', payload.report_file);
+  }
+
+  const response = await axiosClient.post(`/reviewer/proposals/${proposalId}/review`, formData);
+  markProposalReviewSubmitted(proposalId);
+  return response.data;
 };
 
-export const getSubmittedReviews = async () => {
-  try {
-    const response = await axiosClient.get('/reviewer/my-reviews');
-    return response.data;
-  } catch (apiError) {
-    console.warn('Using mock submitted reviews (API unavailable)', apiError.message);
-    await delay();
-    const reviews = getStoredReviews();
-    return reviews.map((r) => {
-      const proposal = mockAssignedProposals.find((p) => p.id === r.proposal_id);
-      return {
-        ...r,
-        proposal_title: proposal?.title || 'Unknown',
-        protocol_no: proposal?.protocol_no || '—',
-        grant_type: proposal?.grant_type || '—',
-      };
-    });
-  }
+/** Persist proposal metadata for submitted reviews list (API omits proposal_id). */
+export const cacheProposalForReview = (proposalId, snapshot) => {
+  saveReviewSnapshot(proposalId, snapshot);
+  pushReviewMeta(snapshot);
 };
 
+// ─── My Reviews ───────────────────────────────────────────────────────────────
+
+/**
+ * Get all reviews submitted by the logged-in reviewer.
+ * GET /api/v1/reviewer/my-reviews
+ * Returns array of: { id, recommendation, score, comments, report_file_url, submitted_at }
+ */
+export const getMyReviews = async () => {
+  const response = await axiosClient.get('/reviewer/my-reviews');
+  return response.data;
+};
+
+// ─── Dashboard Stats (Derived) ────────────────────────────────────────────────
+
+/**
+ * Get reviewer dashboard statistics (derived from multiple endpoints).
+ * No single endpoint exists - stats are computed from:
+ * - getAssignedProposals() - total assigned and pending review
+ * - getMyReviews() - submitted reviews count
+ * Returns: { total_assigned, pending_review, submitted_reviews }
+ */
 export const getReviewerDashboardStats = async () => {
   try {
-    const response = await axiosClient.get('/reviewer/dashboard');
-    return response.data;
-  } catch (apiError) {
-    console.warn('Using mock dashboard stats (API unavailable)', apiError.message);
-    await delay(300);
-    const reviews = getStoredReviews();
-    const total = mockAssignedProposals.length;
-    const submitted = reviews.length;
-    const pending = total - submitted;
-    return { total_assigned: total, pending_review: pending, submitted_reviews: submitted };
+    const [assignedResponse, submittedReviews] = await Promise.all([
+      axiosClient.get('/reviewer/proposals'),
+      getMyReviews(),
+    ]);
+
+    const assignedProposals = assignedResponse.data || [];
+    const submittedCount = submittedReviews?.length || 0;
+    const totalAssigned = assignedProposals.length;
+    const pendingCount = Math.max(0, totalAssigned - submittedCount);
+
+    return {
+      total_assigned: totalAssigned,
+      pending_review: pendingCount,
+      submitted_reviews: submittedCount,
+    };
+  } catch (error) {
+    console.error('Failed to fetch dashboard stats:', error);
+    throw error;
   }
 };
+
+// ─── DEPRECATED ALIASES (kept for backward compatibility) ──────────────────────
+
+/**
+ * @deprecated Use getMyReviews instead
+ */
+export const getSubmittedReviews = getMyReviews;
+

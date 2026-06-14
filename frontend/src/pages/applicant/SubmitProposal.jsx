@@ -6,10 +6,11 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
-import { createProposalDraft, submitProposal } from '../../api/applicantApi';
-import { getGrantCalls } from '../../api/authApi';
-import { getFaculties, getDepartments, getResearchDisciplines } from '../../api/referenceApi';
+import PageLoader from '../../components/common/PageLoader';
+import { createProposalDraft } from '../../api/applicantApi';
+import { getFaculties, getDepartments, getResearchDisciplines, getGrantCalls } from '../../api/referenceApi';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
+import { findGrantCallById } from '../../utils/grantCallDocuments';
 import { sexOptions, qualificationOptions, designationOptions, typeOfResearchOptions } from '../../utils/formOptions';
 import {
   validateRequired,
@@ -115,7 +116,8 @@ export default function SubmitProposal() {
         ]);
         setFaculties(facultiesData);
         setDisciplines(disciplinesData);
-        setGrantCalls(grantCallsData);
+        setGrantCalls(grantCallsData || []);
+        console.log('[SubmitProposal] grant calls loaded:', grantCallsData);
       } catch (err) {
         console.error('Error loading dropdown data:', err);
       } finally {
@@ -304,14 +306,14 @@ export default function SubmitProposal() {
     try {
       setLoading(true);
       setError(null);
-      const result = await createProposalDraft(formData);
+      await createProposalDraft(formData, { departments, disciplines });
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
         navigate('/applicant/dashboard');
       }, 2000);
     } catch (err) {
-      setError(err.message || 'Failed to save draft');
+      setError(err.response?.data?.detail || err.message || 'Failed to save draft');
     } finally {
       setLoading(false);
     }
@@ -331,7 +333,7 @@ export default function SubmitProposal() {
     try {
       setLoading(true);
       setError(null);
-      const draft = await createProposalDraft(formData);
+      await createProposalDraft(formData, { departments, disciplines });
       // Note: Submit is marked as draft first, user uploads attachments then submits
       setSuccess(true);
       setTimeout(() => {
@@ -475,7 +477,7 @@ export default function SubmitProposal() {
     );
   };
 
-  if (loadingDropdowns) return <Loader />;
+  if (loadingDropdowns) return <PageLoader role="applicant" />;
 
   return (
     <DashboardLayout role="applicant">
@@ -520,6 +522,13 @@ export default function SubmitProposal() {
               {renderSelectWithOther('researchType', 'Type of Research', typeOfResearchOptions, 'researchTypeOther')}
               {renderSelect('grantCall', 'Grant Call', grantCalls)}
             </div>
+            {formData.grantCall && (
+              <GrantCallDocumentsList
+                grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+                title="Grant Call Documents"
+                className="mt-2"
+              />
+            )}
           </div>
         </Card>
 

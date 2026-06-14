@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
+import PageLoader from '../../components/common/PageLoader';
 
 export default function ReviewerNotifications() {
   const [notifications, setNotifications] = useState([]);
@@ -66,7 +66,7 @@ export default function ReviewerNotifications() {
     });
   };
 
-  if (loading) return <Loader />;
+  if (loading) return <PageLoader role="reviewer" />;
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

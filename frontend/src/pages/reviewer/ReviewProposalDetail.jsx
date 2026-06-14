@@ -7,9 +7,11 @@ import {
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import Loader from '../../components/common/Loader';
 import Alert from '../../components/common/Alert';
-import { getAssignedProposalDetail, submitReview } from '../../api/reviewerApi';
+import { getAssignedProposalDetail, submitReview, cacheProposalForReview } from '../../api/reviewerApi';
+import { getApiError } from '../../utils/apiError';
 import { useAuth } from '../../context/AuthContext';
 import { downloadFile } from '../../utils/downloadUtils';
+import { validateUploadFile, UPLOAD_ACCEPT_ATTR } from '../../utils/fileUploadUtils';
 
 const RECOMMENDATIONS = ['Approve', 'Minor Revisions', 'Major Revisions', 'Reject'];
 
@@ -30,7 +32,7 @@ export default function ReviewProposalDetail() {
   useEffect(() => {
     getAssignedProposalDetail(id)
       .then(setProposal)
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(getApiError(err, 'Failed to load proposal')))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -40,14 +42,28 @@ export default function ReviewProposalDetail() {
       setSubmitError('Please select a recommendation.');
       return;
     }
+    if (form.report_file) {
+      const fileError = validateUploadFile(form.report_file);
+      if (fileError) {
+        setSubmitError(fileError);
+        return;
+      }
+    }
     setSubmitting(true);
     setSubmitError('');
     try {
       await submitReview(Number(id), form);
+      if (proposal) {
+        cacheProposalForReview(Number(id), {
+          protocol_no: proposal.protocol_no,
+          proposal_title: proposal.title,
+          grant_type: proposal.grant_type,
+        });
+      }
       setSubmitSuccess(true);
       setProposal((prev) => ({ ...prev, review_submitted: true }));
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(getApiError(err, 'Failed to submit review'));
     } finally {
       setSubmitting(false);
     }
@@ -340,7 +356,7 @@ export default function ReviewProposalDetail() {
                         </label>
                         <input
                           type="file"
-                          accept=".pdf,.doc,.docx"
+                          accept={UPLOAD_ACCEPT_ATTR}
                           onChange={(e) => setForm((prev) => ({ ...prev, report_file: e.target.files[0] }))}
                           className="w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary file:text-white hover:file:opacity-90 file:cursor-pointer"
                         />

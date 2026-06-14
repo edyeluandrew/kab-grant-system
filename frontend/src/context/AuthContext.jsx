@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { ROLE_DASHBOARD_PATHS, ROLES } from '../constants/roles';
+import { ROLE_DASHBOARD_PATHS } from '../constants/roles';
 
 const AuthContext = createContext(null);
 
@@ -9,25 +9,30 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // On app load, restore user from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(AUTH_KEY);
       if (stored) {
-        setUser(JSON.parse(stored));
+        const userData = JSON.parse(stored);
+        setUser(userData);
+        if (userData.access_token) {
+          localStorage.setItem('authToken', userData.access_token);
+        }
       }
-    } catch {
+    } catch (error) {
+      console.error('AuthContext: Error restoring user:', error);
       localStorage.removeItem(AUTH_KEY);
+      localStorage.removeItem('authToken');
     } finally {
       setLoading(false);
     }
   }, []);
 
   const login = (userData) => {
-    // userData shape: { id, first_name, surname, email, role, access_token, refresh_token }
     localStorage.setItem(AUTH_KEY, JSON.stringify(userData));
-    // Also store token separately for axiosClient interceptor
-    localStorage.setItem('authToken', userData.access_token);
+    if (userData.access_token) {
+      localStorage.setItem('authToken', userData.access_token);
+    }
     setUser(userData);
   };
 
@@ -40,7 +45,6 @@ export function AuthProvider({ children }) {
   const isAuthenticated = !!user;
 
   const redirectPathForRole = (role) => {
-    // Use centralized role dashboard paths
     return ROLE_DASHBOARD_PATHS[role] || '/login';
   };
 

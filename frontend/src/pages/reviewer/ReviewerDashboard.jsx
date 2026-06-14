@@ -47,12 +47,33 @@ export default function ReviewerDashboard() {
 
   useEffect(() => {
     getReviewerDashboardStats()
-      .then(setStats)
-      .catch((err) => setError(err.message))
+      .then((data) => {
+        console.log('Reviewer dashboard stats loaded:', data);
+        setStats(data);
+      })
+      .catch((err) => {
+        console.error('Reviewer dashboard API error:', err);
+        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load dashboard stats';
+        setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+        setStats(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <DashboardLayout role="reviewer"><Loader /></DashboardLayout>;
+
+  if (error && !stats) {
+    return (
+      <DashboardLayout role="reviewer">
+        <PageHeader title="Reviewer Dashboard" subtitle="Your Review Dashboard" />
+        <Alert variant="danger">
+          <strong>Failed to load dashboard:</strong> {error}
+          <br/>
+          <small>Please check your connection and refresh the page.</small>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="reviewer">

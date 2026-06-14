@@ -17,9 +17,10 @@ import {
   Clock,
   LogOut,
   User,
+  Settings,
 } from 'lucide-react';
 
-export default function Sidebar({ role = 'staff' }) {
+export default function Sidebar({ role = 'staff', onNavClick }) {
   const { user, logout } = useAuth();
 
   const getMenuItems = () => {
@@ -31,6 +32,7 @@ export default function Sidebar({ role = 'staff' }) {
           { label: 'My Proposals', href: '/applicant/proposals', end: true, icon: FileText },
           { label: 'Submit New Proposal', href: '/applicant/proposals/new', icon: Plus },
           { label: 'Notifications', href: '/applicant/notifications', icon: Bell },
+          { label: 'Settings', href: '/applicant/settings', icon: Settings },
         ];
 
       case ROLES.REVIEWER:
@@ -121,6 +123,7 @@ export default function Sidebar({ role = 'staff' }) {
                 key={index}
                 to={item.href}
                 end={item.end}
+                onClick={onNavClick}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition ${
                     isActive

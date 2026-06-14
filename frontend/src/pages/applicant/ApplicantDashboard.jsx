@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, PenTool, Clock, CheckCircle } from 'lucide-react';
+import { FileText, PenTool, Clock, CheckCircle, Heart } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -8,13 +8,26 @@ import StatCard from '../../components/common/StatCard';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
-import { getApplicantDashboard, getMyProposals, deleteDraft, submitProposal } from '../../api/applicantApi';
+import PageLoader from '../../components/common/PageLoader';
+import { useAuth } from '../../context/AuthContext';
+import { getApplicantDashboard, getMyProposals, deleteDraft } from '../../api/applicantApi';
+import { getMyGrantCallInterests } from '../../api/grantInterestsApi';
+import { getApiError } from '../../utils/apiError';
+import { isDraftLike, getStatusLabel, getStatusVariant } from '../../utils/statusUtils';
+import {
+  getProtocolNo,
+  getGrantType,
+  getTeamMemberCount,
+  getAttachmentSummary,
+  getEditPath,
+} from '../../utils/proposalDisplayUtils';
 
 export default function ApplicantDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [proposals, setProposals] = useState([]);
+  const [interests, setInterests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
@@ -26,11 +39,13 @@ export default function ApplicantDashboard() {
         setLoading(true);
         const dashboardData = await getApplicantDashboard();
         const proposalsData = await getMyProposals();
+        const interestsData = await getMyGrantCallInterests();
         setDashboard(dashboardData);
         setProposals(proposalsData);
+        setInterests(interestsData || []);
         setError(null);
       } catch (err) {
-        setError(err.message);
+        setError(getApiError(err, 'Failed to load dashboard'));
       } finally {
         setLoading(false);
       }
@@ -51,72 +66,29 @@ export default function ApplicantDashboard() {
       setActionSuccess('Draft deleted successfully');
       setTimeout(() => setActionSuccess(null), 3000);
     } catch (err) {
-      setError(err.message || 'Failed to delete draft');
+      setError(getApiError(err, 'Failed to delete draft'));
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleSubmit = async (proposalId) => {
-    try {
-      setActionLoading(proposalId);
-      await submitProposal(proposalId);
-      // Refresh the proposals list
-      const updatedProposals = await getMyProposals();
-      setProposals(updatedProposals);
-      setActionSuccess('Proposal submitted successfully');
-      setTimeout(() => setActionSuccess(null), 3000);
-    } catch (err) {
-      setError(err.message || 'Failed to submit proposal');
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  const getStatusBadge = (status) => {
+  const getProposalTypeBadge = (grantType) => {
     const variants = {
-      draft: 'default',
-      submitted: 'info',
-      under_review: 'warning',
-      approved: 'success',
-      rejected: 'danger',
+      Research: 'info',
+      Innovation: 'accent',
     };
-    return variants[status] || 'default';
+    return variants[grantType] || 'default';
   };
 
-  const getStatusLabel = (status) => {
-    const labels = {
-      draft: 'Draft',
-      submitted: 'Submitted',
-      under_review: 'Under Review',
-      approved: 'Approved',
-      rejected: 'Rejected',
-    };
-    return labels[status] || status;
-  };
-
-  const getProposalTypeBadge = (proposalType) => {
-    const variants = {
-      research: 'info',
-      innovation: 'accent',
-    };
-    return variants[proposalType] || 'default';
-  };
-
-  const getProposalTypeLabel = (proposalType) => {
-    const labels = {
-      research: 'Research',
-      innovation: 'Innovation',
-    };
-    return labels[proposalType] || proposalType;
-  };
-
-  if (loading) return <Loader />;
+  if (loading) return <PageLoader role="applicant" />;
+const userFullName = user ? `${user.first_name} ${user.surname}` : 'Researcher';
+  const isFirstLogin = proposals.length === 0;
+  const greeting = isFirstLogin ? `Welcome, ${userFullName}` : `Welcome back, ${userFullName}`;
 
   return (
     <DashboardLayout role="applicant">
       <PageHeader
-        title={`Welcome back, ${dashboard?.applicantName || 'Researcher'}`}
+        title={greeting}
         subtitle="Manage your research proposals and submissions"
       />
 
@@ -132,6 +104,60 @@ export default function ApplicantDashboard() {
           <StatCard title="Approved" value={dashboard.stats.approved} icon={<CheckCircle className="w-8 h-8" />} />
         </div>
       )}
+
+      {/* Grant Call Interests */}
+      <Card title="My Grant Call Interests" subtitle="Interest submissions required before applying" className="mb-8">
+        {interests.length === 0 ? (
+          <div className="text-center py-6">
+            <Heart className="w-10 h-10 text-muted mx-auto mb-3" />
+            <p className="text-muted mb-4">
+              You have not expressed interest in any grant call yet.
+            </p>
+            <Button variant="primary" onClick={() => navigate('/')}>
+              Browse Grant Calls
+            </Button>
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Grant Call</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Type</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Document</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Status</th>
+                  <th className="text-left py-3 px-4 font-semibold text-textMain">Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {interests.map((item) => (
+                  <tr key={item.id} className="border-b border-border hover:bg-background">
+                    <td className="py-3 px-4 text-textMain">{item.grant_call_title}</td>
+                    <td className="py-3 px-4">
+                      <Badge variant="info">{item.grant_type}</Badge>
+                    </td>
+                    <td className="py-3 px-4 text-muted">{item.file_name}</td>
+                    <td className="py-3 px-4">
+                      <Badge variant="success">{item.status}</Badge>
+                    </td>
+                    <td className="py-3 px-4 text-muted">
+                      {new Date(item.submitted_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-4 flex gap-3">
+              <Button variant="primary" onClick={() => navigate('/applicant/proposals/new')}>
+                Apply for Proposal
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/')}>
+                Express More Interest
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* My Proposals Section */}
       <Card title="My Proposals" subtitle="Recent proposal submissions and drafts">
@@ -161,24 +187,27 @@ export default function ApplicantDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {proposals.map((proposal) => (
+                {proposals.map((proposal) => {
+                  const { uploaded, total, missing } = getAttachmentSummary(proposal);
+                  const grantType = getGrantType(proposal);
+                  return (
                   <tr key={proposal.id} className="border-b border-border hover:bg-background">
-                    <td className="py-3 px-4 text-textMain">{proposal.protocolNo}</td>
+                    <td className="py-3 px-4 text-textMain">{getProtocolNo(proposal)}</td>
                     <td className="py-3 px-4 text-textMain">{proposal.title}</td>
                     <td className="py-3 px-4">
-                      {proposal.proposal_type && (
-                        <Badge variant={getProposalTypeBadge(proposal.proposal_type)}>
-                          {getProposalTypeLabel(proposal.proposal_type)}
+                      {grantType && (
+                        <Badge variant={getProposalTypeBadge(grantType)}>
+                          {grantType}
                         </Badge>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-sm text-muted">{proposal.attachmentsSummary}</td>
+                    <td className="py-3 px-4 text-sm text-muted">{uploaded}/{total} uploaded</td>
                     <td className="py-3 px-4">
-                      <Badge variant={getStatusBadge(proposal.status)}>
+                      <Badge variant={getStatusVariant(proposal.status)}>
                         {getStatusLabel(proposal.status)}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 text-textMain">{proposal.membersCount}</td>
+                    <td className="py-3 px-4 text-textMain">{getTeamMemberCount(proposal)}</td>
                     <td className="py-3 px-4 text-muted">-</td>
                     <td className="py-3 px-4">
                       <div className="space-y-2">
@@ -196,18 +225,13 @@ export default function ApplicantDashboard() {
                         </div>
 
                         {/* Draft Actions */}
-                        {proposal.status === 'draft' && (
+                        {isDraftLike(proposal.status) && (
                           <>
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 variant="secondary"
-                                onClick={() => {
-                                  const editPath = proposal.proposal_type === 'research'
-                                    ? `/applicant/proposals/${proposal.id}/edit/research`
-                                    : `/applicant/proposals/${proposal.id}/edit/innovation`;
-                                  navigate(editPath);
-                                }}
+                                onClick={() => navigate(getEditPath(proposal))}
                                 disabled={actionLoading === proposal.id}
                                 className="flex-1"
                               >
@@ -234,16 +258,17 @@ export default function ApplicantDashboard() {
                               >
                                 Members
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="success"
-                                onClick={() => handleSubmit(proposal.id)}
-                                disabled={actionLoading === proposal.id}
-                                className="flex-1"
-                              >
-                                {actionLoading === proposal.id ? 'Submitting...' : 'Submit'}
-                              </Button>
                             </div>
+                            {missing > 0 && (
+                              <p className="text-xs text-muted">
+                                Upload all required documents to submit automatically.
+                              </p>
+                            )}
+                            {missing === 0 && isDraftLike(proposal.status) && (
+                              <p className="text-xs text-success">
+                                All documents uploaded — submission completes automatically.
+                              </p>
+                            )}
 
                             <div className="flex gap-2">
                               <Button
@@ -261,7 +286,8 @@ export default function ApplicantDashboard() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>

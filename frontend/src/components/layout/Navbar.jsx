@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 
-export default function Navbar() {
+export default function Navbar({ onMenuClick }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -17,9 +17,18 @@ export default function Navbar() {
 
   return (
     <nav className="bg-surface border-b border-border shadow-sm flex-shrink-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
+            {/* Hamburger Menu for Mobile */}
+            <button
+              onClick={onMenuClick}
+              className="md:hidden inline-flex items-center justify-center p-2 rounded-lg text-muted hover:bg-gray-100 hover:text-primary transition"
+              title="Toggle menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
             <img src="/log1.jpg" alt="KAB-FIR Logo" className="h-12 w-auto rounded-lg" />
             <div>
               <h1 className="text-sm font-bold text-primary leading-tight">

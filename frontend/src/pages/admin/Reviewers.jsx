@@ -9,6 +9,8 @@ import Alert from '../../components/common/Alert';
 import Loader from '../../components/common/Loader';
 import Table from '../../components/common/Table';
 import { getReviewers, createReviewer, removeReviewer } from '../../api/adminApi';
+import { normalizeReviewers } from '../../utils/reviewerUtils';
+import { getApiError } from '../../utils/apiError';
 
 const genderOptions = [
   { value: 'Male', label: 'Male' },
@@ -55,11 +57,14 @@ export default function Reviewers() {
   const fetchReviewers = async () => {
     try {
       setLoading(true);
-      const data = await getReviewers();
-      setReviewers(data);
       setError(null);
+      const data = await getReviewers();
+      setReviewers(normalizeReviewers(data || []));
     } catch (err) {
-      setError(err.message);
+      console.error('Failed to fetch reviewers:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load reviewers';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      setReviewers([]);
     } finally {
       setLoading(false);
     }
@@ -104,13 +109,13 @@ export default function Reviewers() {
       setFormLoading(true);
       setFormError(null);
       const newReviewer = await createReviewer(formData);
-      setReviewers((prev) => [...prev, newReviewer]);
+      setReviewers((prev) => [...prev, normalizeReviewers([newReviewer])[0]]);
       setFormData(emptyForm);
       setFormErrors({});
       setSuccess('Reviewer account created successfully. A temporary password has been sent to their email.');
       setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      setFormError(err.message || 'Failed to create reviewer');
+      setFormError(getApiError(err, 'Failed to create reviewer'));
     } finally {
       setFormLoading(false);
     }

@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, AlertCircle, Info, Clock } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
+import PageLoader from '../../components/common/PageLoader';
 import { getApplicantNotifications } from '../../api/applicantApi';
 
 export default function Notifications() {
@@ -79,7 +79,7 @@ export default function Notifications() {
     });
   };
 
-  if (loading) return <Loader />;
+  if (loading) return <PageLoader role="applicant" />;
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

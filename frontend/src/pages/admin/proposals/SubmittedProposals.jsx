@@ -12,6 +12,8 @@ import Badge from '../../../components/common/Badge';
 import Table from '../../../components/common/Table';
 import Modal from '../../../components/common/Modal';
 import { getSubmittedProposals, getReviewers, assignReviewers } from '../../../api/adminApi';
+import { normalizeReviewers } from '../../../utils/reviewerUtils';
+import { getApiError } from '../../../utils/apiError';
 
 export default function SubmittedProposals() {
   const navigate = useNavigate();
@@ -35,16 +37,21 @@ export default function SubmittedProposals() {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setError(null);
         const proposalsData = await getSubmittedProposals();
-        setProposals(proposalsData);
+        setProposals(proposalsData || []);
         
         // Only fetch reviewers if user has permission to assign them
         if (canAssign) {
           const reviewersData = await getReviewers();
-          setReviewers(reviewersData);
+          setReviewers(normalizeReviewers(reviewersData || []));
         }
       } catch (err) {
-        setError(err.message);
+        console.error('Failed to fetch submitted proposals:', err);
+        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load proposals';
+        setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+        setProposals([]);
+        setReviewers([]);
       } finally {
         setLoading(false);
       }
@@ -95,7 +102,11 @@ export default function SubmittedProposals() {
     { key: 'grant_type', label: 'Type', render: (row) => <Badge variant="info">{row.grant_type}</Badge> },
     { key: 'pi', label: 'Principal Investigator', render: (row) => `${row.pi_first_name} ${row.pi_last_name}` },
     { key: 'pi_phone', label: 'Contact' },
-    { key: 'attachments_count', label: 'Attachments', render: (row) => `${row.attachments_count}/9` },
+    {
+      key: 'attachments',
+      label: 'Attachments',
+      render: (row) => `${row.attachments?.length ?? row.attachments_count ?? 0}/9`,
+    },
     {
       key: 'actions',
       label: 'Actions',

@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.models.models import (  # noqa: F401 — must be imported for metadata
     Faculty, Department, User, OTPToken, Reviewer,
-    GrantCall, Proposal, ProposalAttachment, ProjectTeamMember,
+    GrantCall, GrantCallInterest, Proposal, ProposalAttachment, ProjectTeamMember,
     ReviewAssignment, ReviewerReport, ProposalStatusHistory, SystemSetting
 )
 

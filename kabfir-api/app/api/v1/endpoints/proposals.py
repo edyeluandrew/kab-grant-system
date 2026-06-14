@@ -16,7 +16,7 @@ from app.schemas.schemas import (
     TeamMemberResponse, MessageResponse
 )
 from app.utils.helpers import generate_protocol_number, is_submission_open
-from app.utils.cloudinary import upload_file
+from app.utils.file_storage import upload_file, delete_file
 from app.utils.email import send_proposal_submitted_email
 
 router = APIRouter(prefix="/proposals", tags=["Proposals"])
@@ -258,18 +258,17 @@ async def upload_attachment(
     # Remove existing attachment of same type if any
     existing = next((a for a in proposal.attachments if a.attachment_type == attachment_type), None)
     if existing:
-        from app.utils.cloudinary import delete_file
-        await delete_file(existing.cloudinary_public_id)
+        await delete_file(existing.file_public_id)
         await db.delete(existing)
 
-    upload_result = await upload_file(file, folder=f"kabfir/proposals/{proposal_id}")
+    upload_result = await upload_file(file, folder=f"proposals/{proposal_id}")
 
     attachment = ProposalAttachment(
         proposal_id=proposal.id,
         attachment_type=attachment_type,
         file_name=upload_result["file_name"],
-        cloudinary_url=upload_result["url"],
-        cloudinary_public_id=upload_result["public_id"],
+        file_url=upload_result["url"],
+        file_public_id=upload_result["public_id"],
     )
     db.add(attachment)
     await db.commit()

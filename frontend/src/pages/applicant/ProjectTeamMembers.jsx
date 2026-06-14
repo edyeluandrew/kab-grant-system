@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { Save, Eye, CheckCircle2, ArrowLeft, X } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
+import PageLoader from '../../components/common/PageLoader';
 import { getProjectTeamMembers, addProjectTeamMember, deleteProjectTeamMember } from '../../api/applicantApi';
 import { getFaculties, getDepartments, getResearchDisciplines } from '../../api/referenceApi';
 import { sexOptions, qualificationOptions, designationOptions } from '../../utils/formOptions';
 import { validateKABEmail, validatePhone, isOtherOption } from '../../utils/validations';
+import { getApiError } from '../../utils/apiError';
 
 export default function ProjectTeamMembers() {
   const { id: proposalId } = useParams();
@@ -20,6 +22,7 @@ export default function ProjectTeamMembers() {
   const [submitError, setSubmitError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [errors, setErrors] = useState({});
+  const [showPreview, setShowPreview] = useState(false);
   
   // Dropdown loading states
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
@@ -147,19 +150,57 @@ export default function ProjectTeamMembers() {
   const handleAddMember = async (e) => {
     e.preventDefault();
 
-    const newErrors = validateForm();
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setSubmitError('Please fix all errors before adding the member');
-      return;
-    }
-
-    try {
+    if (!showPreview) {
+      // Stage 1: Validate and enter preview
+      const newErrors = validateForm();
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        setSubmitError('Please fix all errors before proceeding');
+        return;
+      }
       setSubmitError(null);
       setErrors({});
-      const newMember = await addProjectTeamMember(proposalId, formData);
-      setTeamMembers((prev) => [...prev, newMember]);
-      setSuccess('Team member added successfully');
+      setShowPreview(true);
+    } else {
+      // Stage 2: Actually add the member
+      try {
+        setSubmitError(null);
+        const newMember = await addProjectTeamMember(proposalId, formData, {
+          departments,
+          disciplines,
+        });
+        setTeamMembers((prev) => [...prev, newMember]);
+        setSuccess('Team member added successfully');
+        setFormData({
+          firstName: '',
+          lastName: '',
+          qualifications: '',
+          qualificationsOther: '',
+          gender: '',
+          designation: '',
+          designationOther: '',
+          faculty: '',
+          department: '',
+          specialization: '',
+          email: '',
+          phone: '',
+        });
+        setShowPreview(false);
+        setTimeout(() => setSuccess(null), 3000);
+      } catch (err) {
+        setSubmitError(getApiError(err, 'Failed to add team member'));
+      }
+    }
+  };
+
+  const handleBackToEdit = () => {
+    setShowPreview(false);
+  };
+
+  const handleCancel = () => {
+    if (showPreview) {
+      setShowPreview(false);
+    } else {
       setFormData({
         firstName: '',
         lastName: '',
@@ -174,9 +215,8 @@ export default function ProjectTeamMembers() {
         email: '',
         phone: '',
       });
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setSubmitError(err.message || 'Failed to add team member');
+      setErrors({});
+      setSubmitError(null);
     }
   };
 
@@ -188,12 +228,12 @@ export default function ProjectTeamMembers() {
         setSuccess('Team member removed successfully');
         setTimeout(() => setSuccess(null), 3000);
       } catch (err) {
-        setSubmitError(err.message || 'Failed to remove team member');
+        setSubmitError(getApiError(err, 'Failed to remove team member'));
       }
     }
   };
 
-  if (loading) return <Loader />;
+  if (loading) return <PageLoader role="applicant" />;
 
   const renderSelectWithOther = (fieldName, label, options, otherFieldName) => {
     return (
@@ -307,26 +347,129 @@ export default function ProjectTeamMembers() {
       {success && <Alert variant="success">{success}</Alert>}
 
       {/* Add New Member Form */}
-      <Card title="Add New Team Member">
-        <form onSubmit={handleAddMember} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderInputField('firstName', 'First Name')}
-            {renderInputField('lastName', 'Last Name')}
-            {renderSelectWithOther('qualifications', 'Highest Qualifications', qualificationOptions, 'qualificationsOther')}
-            {renderSelect('gender', 'Gender', sexOptions)}
-            {renderSelectWithOther('designation', 'Designation', designationOptions, 'designationOther')}
-            {renderSelect('faculty', 'Faculty', faculties)}
-            {renderSelect('department', 'Department', departments)}
-            {renderSelect('specialization', 'Research Specialization', disciplines)}
-            {renderInputField('email', 'KAB Email Address', 'email')}
-            {renderInputField('phone', 'Telephone Number', 'tel')}
+      <Card title={showPreview ? 'Review Team Member' : 'Add New Team Member'}>
+        {!showPreview ? (
+          <form onSubmit={handleAddMember} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInputField('firstName', 'First Name')}
+              {renderInputField('lastName', 'Last Name')}
+              {renderSelectWithOther('qualifications', 'Highest Qualifications', qualificationOptions, 'qualificationsOther')}
+              {renderSelect('gender', 'Gender', sexOptions)}
+              {renderSelectWithOther('designation', 'Designation', designationOptions, 'designationOther')}
+              {renderSelect('faculty', 'Faculty', faculties)}
+              {renderSelect('department', 'Department', departments)}
+              {renderSelect('specialization', 'Research Specialization', disciplines)}
+              {renderInputField('email', 'KAB Email Address', 'email')}
+              {renderInputField('phone', 'Telephone Number', 'tel')}
+            </div>
+            <div className="flex gap-4 justify-end">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-textMain font-bold text-lg rounded-md transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-8 py-4 bg-warning hover:bg-opacity-90 text-white font-bold text-lg rounded-md transition flex items-center gap-2"
+              >
+                <Save size={20} />
+                Save Draft
+              </button>
+              <button
+                type="submit"
+                onClick={handleAddMember}
+                className="px-8 py-4 bg-accent hover:bg-opacity-90 text-white font-bold text-lg rounded-md transition flex items-center gap-2"
+              >
+                <Eye size={20} />
+                Preview & Add
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="space-y-6">
+            {/* Preview Content */}
+            <div className="bg-background rounded-md p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">First Name</label>
+                  <p className="text-textMain font-medium text-lg">{formData.firstName}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Last Name</label>
+                  <p className="text-textMain font-medium text-lg">{formData.lastName}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Qualifications</label>
+                  <p className="text-textMain font-medium text-lg">
+                    {qualificationOptions.find(q => q.value === formData.qualifications)?.label}
+                    {isOtherOption(formData.qualifications) && formData.qualificationsOther && ` - ${formData.qualificationsOther}`}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Gender</label>
+                  <p className="text-textMain font-medium text-lg">
+                    {sexOptions.find(s => s.value === formData.gender)?.label}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Designation</label>
+                  <p className="text-textMain font-medium text-lg">
+                    {designationOptions.find(d => d.value === formData.designation)?.label}
+                    {isOtherOption(formData.designation) && formData.designationOther && ` - ${formData.designationOther}`}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Faculty</label>
+                  <p className="text-textMain font-medium text-lg">
+                    {faculties.find(f => f.value === formData.faculty)?.label}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Department</label>
+                  <p className="text-textMain font-medium text-lg">
+                    {departments.find(d => d.value === formData.department)?.label}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Specialization</label>
+                  <p className="text-textMain font-medium text-lg">
+                    {disciplines.find(d => d.value === formData.specialization)?.label}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Email</label>
+                  <p className="text-textMain font-medium text-lg">{formData.email}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted uppercase tracking-wide mb-1">Phone</label>
+                  <p className="text-textMain font-medium text-lg">{formData.phone}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Action Buttons */}
+            <div className="flex gap-4 justify-end">
+              <button
+                type="button"
+                onClick={handleBackToEdit}
+                className="px-8 py-4 bg-gray-200 hover:bg-gray-300 text-textMain font-bold text-lg rounded-md transition flex items-center gap-2"
+              >
+                <ArrowLeft size={20} />
+                Back to Edit
+              </button>
+              <button
+                type="button"
+                onClick={handleAddMember}
+                className="px-8 py-4 bg-success hover:bg-opacity-90 text-white font-bold text-lg rounded-md transition flex items-center gap-2"
+              >
+                <CheckCircle2 size={20} />
+                Confirm & Add Member
+              </button>
+            </div>
           </div>
-          <div className="flex justify-end">
-            <Button type="submit" variant="primary">
-              Add Team Member
-            </Button>
-          </div>
-        </form>
+        )}
       </Card>
 
       {/* Team Members List */}
@@ -352,7 +495,7 @@ export default function ProjectTeamMembers() {
                 {teamMembers.map((member) => (
                   <tr key={member.id} className="border-b border-border hover:bg-background">
                     <td className="py-3 px-4 text-textMain font-medium">
-                      {member.firstName} {member.lastName}
+                      {member.first_name || member.firstName} {member.last_name || member.lastName}
                     </td>
                     <td className="py-3 px-4 text-textMain">{member.designation || '-'}</td>
                     <td className="py-3 px-4 text-textMain">{member.faculty || '-'}</td>

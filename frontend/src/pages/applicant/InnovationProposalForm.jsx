@@ -1,160 +1,95 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Save, Eye, CheckCircle2, ArrowLeft } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
 import Alert from '../../components/common/Alert';
-import Loader from '../../components/common/Loader';
-import { createProposalDraft, updateProposalDraft, getProposalDetails, submitProposal } from '../../api/applicantApi';
-import { getFaculties, getDepartments, getInnovationSpecializations, getGrantCalls } from '../../api/referenceApi';
-import { sexOptions, qualificationOptions, designationOptions, typeOfInnovationOptions } from '../../utils/formOptions';
+import PageLoader from '../../components/common/PageLoader';
+import { createProposalDraft, updateProposalDraft, getProposalDetails } from '../../api/applicantApi';
+import { getMe } from '../../api/authApi';
+import { getGrantCalls, getDepartments } from '../../api/referenceApi';
+import { mapApiToInnovationForm } from '../../utils/proposalMapper';
+import { getApiError } from '../../utils/apiError';
 import { createAutosaveManager } from '../../utils/autosave';
-import {
-  validateRequired,
-  validateEmail,
-  validateKABEmail,
-  validatePhone,
-  validateBudget,
-  validateWordCount,
-  validateCompliance,
-  validateOtherSpecification,
-  countWords,
-  isOtherOption,
-  getSpecificationFieldName,
-} from '../../utils/validations';
+import { countWords } from '../../utils/validations';
+import { validateUploadFile, UPLOAD_ACCEPT_ATTR, MAX_UPLOAD_BYTES } from '../../utils/fileUploadUtils';
+import GrantCallDocumentsList from '../../components/grantCalls/GrantCallDocumentsList';
+import { findGrantCallById } from '../../utils/grantCallDocuments';
 
-// Word count limits for innovation fields
+// Word count limits - EXACT FROM SPECIFICATION
 const WORD_LIMITS = {
-  innovationSummary: 200,
+  projectSummary: 300,
   problemStatement: 200,
-  proposedSolution: 200,
-  uniqueness: 200,
-  targetUsers: 250,
-  prototypeDescription: 300,
-  implementationPlan: 500,
-  marketPotential: 250,
-  scalability: 200,
-  sustainability: 150,
-  expectedOutputs: 250,
-  ethicalConsiderations: 200,
-  capacityBuilding: 250,
-  conflictOfInterest: 150,
-  references: 250,
+  proposedSolution: 300,
+  strategyForResults: 600,
+  novelty: 300,
+  capacityBuilding: 500,
+  sustainability: 600,
+  risksEthical: 500,
+  ugandaEconomyContribution: 250,
 };
+
+const skillLevels = [
+  { value: 'individual', label: 'Individual' },
+  { value: 'departmental', label: 'Departmental' },
+  { value: 'faculty', label: 'Faculty Level' },
+  { value: 'community', label: 'Community Level' },
+  { value: 'government', label: 'Government/National Level' },
+  { value: 'organizational', label: 'Organizational' },
+];
 
 export default function InnovationProposalForm({ isEdit = false }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { id: proposalId } = useParams();
+  const isEditMode = isEdit || pathname.includes('/edit/');
   const autosaveManagerRef = useRef(null);
-  const [loading, setLoading] = useState(isEdit ? true : false);
+  const [loading, setLoading] = useState(isEditMode && proposalId ? true : false);
+  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [errors, setErrors] = useState({});
-  const [autosaveStatus, setAutosaveStatus] = useState(''); // 'saving', 'saved', ''
   const [hasAutosavedDraft, setHasAutosavedDraft] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
-  // Dropdown loading states
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
-  const [faculties, setFaculties] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [specializations, setSpecializations] = useState([]);
   const [grantCalls, setGrantCalls] = useState([]);
 
   const defaultFormData = {
     proposal_type: 'innovation',
-    // Basic Project Information
-    projectTitle: '',
-    piFirstName: '',
-    piLastName: '',
-    piQualifications: '',
-    piQualificationsOther: '',
-    piSex: '',
-    piDesignation: '',
-    piDesignationOther: '',
-    faculty: '',
-    department: '',
-    innovationSpecialization: '',
-    piEmail: '',
-    piPhone: '',
-    typeOfInnovation: '',
-    typeOfInnovationOther: '',
     grantCall: '',
-
-    // Innovation Description
-    innovationSummary: '',
+    projectSummary: '',
     problemStatement: '',
     proposedSolution: '',
-    uniqueness: '',
-    targetUsers: '',
-    prototypeDescription: '',
-    implementationPlan: '',
-    marketPotential: '',
-    scalability: '',
-    sustainability: '',
-    expectedOutputs: '',
-    ethicalConsiderations: '',
+    strategyForResults: '',
+    novelty: '',
     capacityBuilding: '',
-    conflictOfInterest: '',
-    references: '',
-    totalBudget: '',
-
-    // Compliance
+    skillLevel: '',
+    sustainability: '',
+    risksEthical: '',
+    ugandaEconomyContribution: '',
+    budgetFile: null,
+    conceptPaperFile: null,
     compliance: false,
   };
 
   const [formData, setFormData] = useState(defaultFormData);
 
-  // Load reference data and restore autosaved draft on mount
   useEffect(() => {
-    // Initialize autosave manager with appropriate key based on mode
-    const autosaveKey = isEdit && proposalId 
+    const autosaveKey = isEditMode && proposalId 
       ? `kab_innovation_proposal_edit_${proposalId}`
       : 'kab_innovation_proposal_draft';
     autosaveManagerRef.current = createAutosaveManager(autosaveKey, defaultFormData);
 
-    // Load proposal data if in edit mode
-    if (isEdit && proposalId) {
+    if (isEditMode && proposalId) {
       const loadProposalData = async () => {
         try {
           const proposal = await getProposalDetails(proposalId);
-          // Populate form with proposal data
           setFormData((prev) => ({
             ...prev,
-            projectTitle: proposal.title || proposal.projectTitle || '',
-            piFirstName: proposal.piFirstName || '',
-            piLastName: proposal.piLastName || '',
-            piQualifications: proposal.piQualifications || '',
-            piQualificationsOther: proposal.piQualificationsOther || '',
-            piSex: proposal.piSex || '',
-            piDesignation: proposal.piDesignation || '',
-            piDesignationOther: proposal.piDesignationOther || '',
-            faculty: proposal.faculty || '',
-            department: proposal.department || '',
-            innovationSpecialization: proposal.innovationSpecialization || '',
-            piEmail: proposal.piEmail || '',
-            piPhone: proposal.piPhone || '',
-            typeOfInnovation: proposal.typeOfInnovation || '',
-            typeOfInnovationOther: proposal.typeOfInnovationOther || '',
-            grantCall: proposal.grantCall || '',
-            innovationSummary: proposal.innovationSummary || '',
-            problemStatement: proposal.problemStatement || '',
-            proposedSolution: proposal.proposedSolution || '',
-            uniqueness: proposal.uniqueness || '',
-            targetUsers: proposal.targetUsers || '',
-            prototypeDescription: proposal.prototypeDescription || '',
-            implementationPlan: proposal.implementationPlan || '',
-            marketPotential: proposal.marketPotential || '',
-            scalability: proposal.scalability || '',
-            sustainability: proposal.sustainability || '',
-            expectedOutputs: proposal.expectedOutputs || '',
-            ethicalConsiderations: proposal.ethicalConsiderations || '',
-            capacityBuilding: proposal.capacityBuilding || '',
-            conflictOfInterest: proposal.conflictOfInterest || '',
-            references: proposal.references || '',
-            totalBudget: proposal.totalBudget || '',
-            compliance: proposal.compliance || false,
+            ...mapApiToInnovationForm(proposal),
           }));
         } catch (err) {
           setError(err.message || 'Failed to load proposal');
@@ -162,10 +97,8 @@ export default function InnovationProposalForm({ isEdit = false }) {
           setLoading(false);
         }
       };
-      
       loadProposalData();
     } else {
-      // For create mode, check if autosaved draft exists
       const autosavedData = autosaveManagerRef.current.restore();
       if (autosavedData) {
         setFormData(autosavedData);
@@ -176,527 +109,426 @@ export default function InnovationProposalForm({ isEdit = false }) {
     const loadDropdownData = async () => {
       try {
         setLoadingDropdowns(true);
-        const [facultiesData, specializationsData, grantCallsData] = await Promise.all([
-          getFaculties(),
-          getInnovationSpecializations(),
-          getGrantCalls(),
-        ]);
-        setFaculties(facultiesData);
-        setSpecializations(specializationsData);
-        setGrantCalls(grantCallsData);
+        const grantCallsData = await getGrantCalls();
+        setGrantCalls(grantCallsData || []);
+        console.log('[InnovationProposalForm] grant calls loaded:', grantCallsData);
+        if (!grantCallsData?.length) {
+          console.warn('No open grant calls available for dropdown.');
+        }
       } catch (err) {
         console.error('Error loading dropdown data:', err);
+        setError(err.message || 'Failed to load grant calls. Please refresh or contact the administrator.');
       } finally {
         setLoadingDropdowns(false);
       }
     };
 
     loadDropdownData();
-  }, [isEdit, proposalId]);
-
-  // Load departments when faculty changes
-  useEffect(() => {
-    if (formData.faculty) {
-      const loadDepts = async () => {
-        try {
-          const depts = await getDepartments(formData.faculty);
-          setDepartments(depts);
-        } catch (err) {
-          console.error('Error loading departments:', err);
-        }
-      };
-      loadDepts();
-    } else {
-      setDepartments([]);
-    }
-  }, [formData.faculty]);
+  }, [isEditMode, proposalId]);
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const updated = {
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value,
-    };
+    const { name, value, type, checked, files } = e.target;
     
-    setFormData(updated);
-    
-    // Autosave the form data silently (debounced by autosave manager)
-    if (autosaveManagerRef.current) {
-      autosaveManagerRef.current.save(updated);
+    let newValue;
+    if (type === 'checkbox') {
+      newValue = checked;
+    } else if (type === 'file') {
+      newValue = files ? files[0] : null;
+    } else {
+      newValue = value;
     }
     
-    // Clear error for this field when user starts typing
+    const updated = {
+      ...formData,
+      [name]: newValue,
+    };
+    setFormData(updated);
+    if (autosaveManagerRef.current && type !== 'file') {
+      autosaveManagerRef.current.save(updated);
+    }
     if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: '',
-      }));
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
-  const validateForm = (isSubmitting = false) => {
+  const validateForm = () => {
     const newErrors = {};
 
-    // Required fields
-    if (!formData.projectTitle) newErrors.projectTitle = 'Project title is required';
-    if (!formData.piFirstName) newErrors.piFirstName = 'PI first name is required';
-    if (!formData.piLastName) newErrors.piLastName = 'PI last name is required';
-    if (!formData.piQualifications) newErrors.piQualifications = 'Highest qualifications are required';
-    if (isOtherOption(formData.piQualifications) && !formData.piQualificationsOther) {
-      newErrors.piQualificationsOther = 'Please specify your qualifications';
-    }
-    if (!formData.piSex) newErrors.piSex = 'Sex is required';
-    if (!formData.piDesignation) newErrors.piDesignation = 'Designation is required';
-    if (isOtherOption(formData.piDesignation) && !formData.piDesignationOther) {
-      newErrors.piDesignationOther = 'Please specify your designation';
-    }
-    if (!formData.faculty) newErrors.faculty = 'Faculty is required';
-    if (!formData.department) newErrors.department = 'Department is required';
-    if (!formData.innovationSpecialization) newErrors.innovationSpecialization = 'Innovation specialization is required';
-    if (!formData.piEmail) newErrors.piEmail = 'Email is required';
-    const emailError = validateKABEmail(formData.piEmail);
-    if (formData.piEmail && emailError) {
-      newErrors.piEmail = emailError;
-    }
-    if (!formData.piPhone) newErrors.piPhone = 'Phone number is required';
-    const phoneError = validatePhone(formData.piPhone);
-    if (formData.piPhone && phoneError) {
-      newErrors.piPhone = phoneError;
-    }
-    if (!formData.typeOfInnovation) newErrors.typeOfInnovation = 'Type of innovation is required';
-    if (isOtherOption(formData.typeOfInnovation) && !formData.typeOfInnovationOther) {
-      newErrors.typeOfInnovationOther = 'Please specify the innovation type';
-    }
+    // Validate grant call
     if (!formData.grantCall) newErrors.grantCall = 'Grant call is required';
 
-    // Innovation Description - all required
-    if (!formData.innovationSummary) newErrors.innovationSummary = 'Innovation summary is required';
-    if (formData.innovationSummary && validateWordCount(formData.innovationSummary, WORD_LIMITS.innovationSummary, 'Innovation Summary')) {
-      newErrors.innovationSummary = validateWordCount(formData.innovationSummary, WORD_LIMITS.innovationSummary, 'Innovation Summary');
+    // Content validation
+    const validateField = (fieldName, label, maxWords) => {
+      if (!formData[fieldName]?.trim()) {
+        newErrors[fieldName] = `${label} is required`;
+      } else {
+        const wordCount = countWords(formData[fieldName]);
+        if (wordCount > maxWords) {
+          newErrors[fieldName] = `${label} exceeds ${maxWords} words (current: ${wordCount})`;
+        }
+      }
+    };
+
+    validateField('projectSummary', 'SUMMARY OF YOUR PROJECT IDEA', WORD_LIMITS.projectSummary);
+    validateField('problemStatement', 'PROBLEM', WORD_LIMITS.problemStatement);
+    validateField('proposedSolution', 'SOLUTION', WORD_LIMITS.proposedSolution);
+    validateField('strategyForResults', 'STRATEGY FOR RESULTS', WORD_LIMITS.strategyForResults);
+    validateField('novelty', 'NOVELTY', WORD_LIMITS.novelty);
+    validateField('capacityBuilding', 'CAPACITY BUILDING', WORD_LIMITS.capacityBuilding);
+    if (!formData.skillLevel) newErrors.skillLevel = 'Skill level is required';
+    validateField('sustainability', 'SUSTAINABILITY', WORD_LIMITS.sustainability);
+    validateField('risksEthical', 'RISKS AND THEIR MITIGATION ETHICAL CONSIDERATIONS', WORD_LIMITS.risksEthical);
+    validateField('ugandaEconomyContribution', 'CONTRIBUTION TO UGANDA\'S ECONOMY', WORD_LIMITS.ugandaEconomyContribution);
+    
+    if (formData.budgetFile) {
+      const budgetError = validateUploadFile(formData.budgetFile);
+      if (budgetError) newErrors.budgetFile = budgetError;
+    }
+    if (formData.conceptPaperFile) {
+      const conceptError = validateUploadFile(formData.conceptPaperFile);
+      if (conceptError) newErrors.conceptPaperFile = conceptError;
     }
 
-    if (!formData.problemStatement) newErrors.problemStatement = 'Problem statement is required';
-    if (formData.problemStatement && validateWordCount(formData.problemStatement, WORD_LIMITS.problemStatement, 'Problem Statement')) {
-      newErrors.problemStatement = validateWordCount(formData.problemStatement, WORD_LIMITS.problemStatement, 'Problem Statement');
-    }
-
-    if (!formData.proposedSolution) newErrors.proposedSolution = 'Proposed solution is required';
-    if (formData.proposedSolution && validateWordCount(formData.proposedSolution, WORD_LIMITS.proposedSolution, 'Proposed Solution')) {
-      newErrors.proposedSolution = validateWordCount(formData.proposedSolution, WORD_LIMITS.proposedSolution, 'Proposed Solution');
-    }
-
-    if (!formData.uniqueness) newErrors.uniqueness = 'Uniqueness/Innovativeness is required';
-    if (formData.uniqueness && validateWordCount(formData.uniqueness, WORD_LIMITS.uniqueness, 'Uniqueness')) {
-      newErrors.uniqueness = validateWordCount(formData.uniqueness, WORD_LIMITS.uniqueness, 'Uniqueness');
-    }
-
-    if (!formData.targetUsers) newErrors.targetUsers = 'Target users/beneficiaries is required';
-    if (formData.targetUsers && validateWordCount(formData.targetUsers, WORD_LIMITS.targetUsers, 'Target Users')) {
-      newErrors.targetUsers = validateWordCount(formData.targetUsers, WORD_LIMITS.targetUsers, 'Target Users');
-    }
-
-    if (!formData.prototypeDescription) newErrors.prototypeDescription = 'Prototype/product/service description is required';
-    if (formData.prototypeDescription && validateWordCount(formData.prototypeDescription, WORD_LIMITS.prototypeDescription, 'Prototype Description')) {
-      newErrors.prototypeDescription = validateWordCount(formData.prototypeDescription, WORD_LIMITS.prototypeDescription, 'Prototype Description');
-    }
-
-    if (!formData.implementationPlan) newErrors.implementationPlan = 'Implementation plan is required';
-    if (formData.implementationPlan && validateWordCount(formData.implementationPlan, WORD_LIMITS.implementationPlan, 'Implementation Plan')) {
-      newErrors.implementationPlan = validateWordCount(formData.implementationPlan, WORD_LIMITS.implementationPlan, 'Implementation Plan');
-    }
-
-    if (!formData.marketPotential) newErrors.marketPotential = 'Market/adoption potential is required';
-    if (formData.marketPotential && validateWordCount(formData.marketPotential, WORD_LIMITS.marketPotential, 'Market Potential')) {
-      newErrors.marketPotential = validateWordCount(formData.marketPotential, WORD_LIMITS.marketPotential, 'Market Potential');
-    }
-
-    if (!formData.scalability) newErrors.scalability = 'Scalability is required';
-    if (formData.scalability && validateWordCount(formData.scalability, WORD_LIMITS.scalability, 'Scalability')) {
-      newErrors.scalability = validateWordCount(formData.scalability, WORD_LIMITS.scalability, 'Scalability');
-    }
-
-    if (!formData.sustainability) newErrors.sustainability = 'Sustainability is required';
-    if (formData.sustainability && validateWordCount(formData.sustainability, WORD_LIMITS.sustainability, 'Sustainability')) {
-      newErrors.sustainability = validateWordCount(formData.sustainability, WORD_LIMITS.sustainability, 'Sustainability');
-    }
-
-    if (!formData.expectedOutputs) newErrors.expectedOutputs = 'Expected outputs and impact is required';
-    if (formData.expectedOutputs && validateWordCount(formData.expectedOutputs, WORD_LIMITS.expectedOutputs, 'Expected Outputs')) {
-      newErrors.expectedOutputs = validateWordCount(formData.expectedOutputs, WORD_LIMITS.expectedOutputs, 'Expected Outputs');
-    }
-
-    if (!formData.ethicalConsiderations) newErrors.ethicalConsiderations = 'Ethical/environmental considerations are required';
-    if (formData.ethicalConsiderations && validateWordCount(formData.ethicalConsiderations, WORD_LIMITS.ethicalConsiderations, 'Ethical Considerations')) {
-      newErrors.ethicalConsiderations = validateWordCount(formData.ethicalConsiderations, WORD_LIMITS.ethicalConsiderations, 'Ethical Considerations');
-    }
-
-    if (!formData.capacityBuilding) newErrors.capacityBuilding = 'Capacity building is required';
-    if (formData.capacityBuilding && validateWordCount(formData.capacityBuilding, WORD_LIMITS.capacityBuilding, 'Capacity Building')) {
-      newErrors.capacityBuilding = validateWordCount(formData.capacityBuilding, WORD_LIMITS.capacityBuilding, 'Capacity Building');
-    }
-
-    if (!formData.conflictOfInterest) newErrors.conflictOfInterest = 'Conflict of interest statement is required';
-    if (formData.conflictOfInterest && validateWordCount(formData.conflictOfInterest, WORD_LIMITS.conflictOfInterest, 'Conflict of Interest')) {
-      newErrors.conflictOfInterest = validateWordCount(formData.conflictOfInterest, WORD_LIMITS.conflictOfInterest, 'Conflict of Interest');
-    }
-
-    if (!formData.references) newErrors.references = 'References are required';
-    if (formData.references && validateWordCount(formData.references, WORD_LIMITS.references, 'References')) {
-      newErrors.references = validateWordCount(formData.references, WORD_LIMITS.references, 'References');
-    }
-
-    if (!formData.totalBudget) newErrors.totalBudget = 'Total budget is required';
-    if (formData.totalBudget && validateBudget(formData.totalBudget)) {
-      newErrors.totalBudget = validateBudget(formData.totalBudget);
-    }
-
-    // Compliance only for submission
-    if (isSubmitting && !formData.compliance) {
-      newErrors.compliance = 'You must confirm compliance before continuing';
-    }
+    if (!formData.compliance) newErrors.compliance = 'You must accept the compliance agreement';
 
     return newErrors;
   };
 
-  const handleSaveDraft = async (e) => {
-    e.preventDefault();
-    
-    const newErrors = validateForm(false);
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setError('Please fix the errors below before saving');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+  const getInnovationMapperOptions = async () => {
+    const userProfile = await getMe();
+    let departmentName = 'Department';
+    if (userProfile.department_id && userProfile.faculty_id) {
+      const depts = await getDepartments(userProfile.faculty_id);
+      departmentName = depts.find((d) => d.id === userProfile.department_id)?.label || departmentName;
     }
+    return { userProfile, departmentName };
+  };
 
+  const handleSaveDraft = async (e) => {
+    e?.preventDefault();
     try {
-      setLoading(true);
       setError(null);
-      
-      let result;
-      if (isEdit && proposalId) {
-        // Update existing proposal
-        result = await updateProposalDraft(proposalId, formData);
-        // Clear edit autosave after successful save
-        if (autosaveManagerRef.current) {
-          autosaveManagerRef.current.clear();
-        }
+      const mapperOptions = await getInnovationMapperOptions();
+
+      let savedId = proposalId;
+      if (isEditMode && proposalId) {
+        await updateProposalDraft(proposalId, formData, mapperOptions);
       } else {
-        // Create new proposal
-        result = await createProposalDraft(formData);
-        // Clear create autosave after successful save
-        if (autosaveManagerRef.current) {
-          autosaveManagerRef.current.clear();
-        }
+        const created = await createProposalDraft(formData, mapperOptions);
+        savedId = created.id;
       }
-      
-      setSuccess(true);
+
+      if (autosaveManagerRef.current) {
+        autosaveManagerRef.current.clear();
+      }
+      setSuccess('Draft saved successfully!');
       setTimeout(() => {
-        setSuccess(false);
-        navigate('/applicant/proposals');
-      }, 2000);
+        setSuccess('');
+        navigate(`/applicant/proposals/${savedId}/documents`);
+      }, 1500);
     } catch (err) {
-      setError(err.message || 'Failed to save draft');
-    } finally {
-      setLoading(false);
+      setError(getApiError(err, 'Failed to save draft'));
     }
   };
 
   const handleSubmitProposal = async (e) => {
-    e.preventDefault();
-
-    const newErrors = validateForm(true);
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setError('Please fix all errors before submitting');
+    e?.preventDefault();
+    
+    // If not in preview mode yet, validate and go to preview
+    if (!showPreview) {
+      const newErrors = validateForm();
+      
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        setError('Please fix all errors before previewing');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      
+      // Enter preview mode
+      setShowPreview(true);
+      setError(null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
+    // Save draft then send applicant to upload documents (backend auto-submits when attachments complete)
     try {
-      setLoading(true);
-      setError(null);
-      // Navigate to review page with proposal data
-      navigate('/applicant/proposals/review', {
-        state: {
-          proposalData: formData,
-          proposalType: 'innovation',
-          isEdit: isEdit,
-          proposalId: proposalId,
-        },
-      });
+      setSubmitting(true);
+      const mapperOptions = await getInnovationMapperOptions();
+      let savedId = proposalId;
+
+      if (isEditMode && proposalId) {
+        await updateProposalDraft(proposalId, formData, mapperOptions);
+      } else {
+        const created = await createProposalDraft(formData, mapperOptions);
+        savedId = created.id;
+      }
+
+      if (autosaveManagerRef.current) {
+        autosaveManagerRef.current.clear();
+      }
+      setSuccess('Draft saved. Upload documents to complete submission.');
+      setTimeout(() => navigate(`/applicant/proposals/${savedId}/documents`), 1500);
     } catch (err) {
-      setError(err.message || 'Failed to proceed to review');
+      setError(getApiError(err, 'Failed to save proposal'));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const renderTextarea = (fieldName, label, placeholder, wordLimit) => {
+  const TextAreaField = ({ label, fieldName, maxWords, placeholder }) => {
     const wordCount = countWords(formData[fieldName]);
-    const isExceeded = wordCount > wordLimit;
-
+    const isOver = wordCount > maxWords;
     return (
-      <div key={fieldName}>
-        <label className="block text-sm font-medium text-textMain mb-2">
-          {label}
-        </label>
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <label className="block text-sm font-semibold">{label}</label>
+          <span className={`text-xs ${isOver ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+            {wordCount}/{maxWords} words
+          </span>
+        </div>
         <textarea
           name={fieldName}
           value={formData[fieldName]}
           onChange={handleInputChange}
+          rows={4}
           placeholder={placeholder}
-          className={`w-full min-h-[120px] resize-y rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 whitespace-pre-wrap break-words ${
-            errors[fieldName]
-              ? 'border-danger focus:ring-danger'
-              : 'border-border focus:ring-accent focus:border-accent'
-          }`}
+          className={`w-full p-2 border rounded ${errors[fieldName] ? 'border-red-500' : 'border-gray-300'}`}
         />
-        <div className="flex justify-between mt-1">
-          <span className={`text-xs ${isExceeded ? 'text-danger font-semibold' : 'text-muted'}`}>
-            {wordCount} / {wordLimit} words
+        {errors[fieldName] && <p className="text-red-600 text-sm mt-1">{errors[fieldName]}</p>}
+      </div>
+    );
+  };
+
+  const FileInputField = ({ label, fieldName }) => {
+    const fileName = formData[fieldName]?.name || 'No file selected';
+    return (
+      <div className="mb-4">
+        <label className="block text-sm font-semibold mb-2">{label} (optional — upload on documents page)</label>
+        <div className="flex gap-2 items-center">
+          <input
+            type="file"
+            name={fieldName}
+            accept={UPLOAD_ACCEPT_ATTR}
+            onChange={handleInputChange}
+            className={`flex-1 px-3 py-2 border rounded ${errors[fieldName] ? 'border-red-500' : 'border-gray-300'}`}
+          />
+          <span className="text-xs text-gray-600 whitespace-nowrap">
+            Max: {MAX_UPLOAD_BYTES / (1024 * 1024)}MB
           </span>
-          {errors[fieldName] && <span className="text-xs text-danger">{errors[fieldName]}</span>}
         </div>
-      </div>
-    );
-  };
-
-  const renderSelectWithOther = (fieldName, label, options, otherFieldName) => {
-    return (
-      <div>
-        <label className="block text-sm font-medium text-textMain mb-2">
-          {label}
-        </label>
-        <select
-          name={fieldName}
-          value={formData[fieldName]}
-          onChange={handleInputChange}
-          className={`w-full px-3 py-2 border rounded-md text-textMain bg-white outline-none focus:ring-2 ${
-            errors[fieldName]
-              ? 'border-danger focus:ring-danger'
-              : 'border-border focus:ring-accent focus:border-accent'
-          }`}
-        >
-          <option value="">Select option</option>
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
-
-        {isOtherOption(formData[fieldName]) && (
-          <div className="mt-3">
-            <label className="block text-sm font-medium text-textMain mb-2">
-              Please specify
-            </label>
-            <input
-              type="text"
-              name={otherFieldName}
-              value={formData[otherFieldName]}
-              onChange={handleInputChange}
-              placeholder="Enter details"
-              className={`w-full px-3 py-2 border rounded-md text-textMain outline-none focus:ring-2 ${
-                errors[otherFieldName]
-                  ? 'border-danger focus:ring-danger'
-                  : 'border-border focus:ring-accent focus:border-accent'
-              }`}
-            />
-            {errors[otherFieldName] && <span className="text-xs text-danger mt-1 block">{errors[otherFieldName]}</span>}
-          </div>
+        {formData[fieldName] && (
+          <p className="text-sm text-gray-600 mt-1">Selected: {fileName}</p>
         )}
+        {errors[fieldName] && <p className="text-red-600 text-sm mt-1">{errors[fieldName]}</p>}
       </div>
     );
   };
 
-  const renderSelect = (fieldName, label, options) => {
-    return (
-      <div>
-        <label className="block text-sm font-medium text-textMain mb-2">
-          {label}
-        </label>
-        <select
-          name={fieldName}
-          value={formData[fieldName]}
-          onChange={handleInputChange}
-          disabled={fieldName === 'department' && !formData.faculty}
-          className={`w-full px-3 py-2 border rounded-md text-textMain bg-white outline-none focus:ring-2 ${
-            errors[fieldName]
-              ? 'border-danger focus:ring-danger'
-              : 'border-border focus:ring-accent focus:border-accent'
-          } ${fieldName === 'department' && !formData.faculty ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <option value="">Select option</option>
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
-      </div>
-    );
-  };
+  if (loading || loadingDropdowns) return <PageLoader role="applicant" />;
 
-  const renderInputField = (fieldName, label, type = 'text') => {
+  // PREVIEW MODE - Show editable overview
+  if (showPreview) {
+    const grantCallName = grantCalls.find(
+      (gc) => (gc.value || String(gc.id)) === String(formData.grantCall)
+    )?.label || 'N/A';
+
     return (
-      <div>
-        <label className="block text-sm font-medium text-textMain mb-2">
-          {label}
-        </label>
-        <input
-          type={type}
-          name={fieldName}
-          value={formData[fieldName]}
-          onChange={handleInputChange}
-          className={`w-full px-3 py-2 border rounded-md text-textMain outline-none focus:ring-2 ${
-            errors[fieldName]
-              ? 'border-danger focus:ring-danger'
-              : 'border-border focus:ring-accent focus:border-accent'
-          }`}
+      <DashboardLayout role="applicant">
+        <PageHeader
+          title="Review Your Innovation Proposal"
+          subtitle="Review all fields. You can still make changes before final submission."
         />
-        {errors[fieldName] && <span className="text-xs text-danger mt-1 block">{errors[fieldName]}</span>}
-      </div>
-    );
-  };
 
-  if (loadingDropdowns) return <Loader />;
+        {error && <Alert variant="danger">{error}</Alert>}
+        {success && <Alert variant="success">{success}</Alert>}
+
+        <div className="grid grid-cols-1 gap-6">
+          {/* Grant Call Info */}
+          <Card title="Grant Call">
+            <div className="bg-blue-50 p-4 rounded border border-blue-200">
+              <p className="font-semibold text-blue-900">{grantCallName}</p>
+            </div>
+            <GrantCallDocumentsList
+              grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+              title="Grant Call Documents"
+            />
+          </Card>
+
+          {/* Innovation Content - Editable */}
+          <Card title="Innovation Proposal Content (Editable)">
+            <TextAreaField label="SUMMARY OF YOUR PROJECT IDEA (In not more than 300 words, describe your idea)" fieldName="projectSummary" maxWords={WORD_LIMITS.projectSummary} placeholder="" />
+            <TextAreaField label="PROBLEM: What societal problems/needs are you addressing? (In not more than 200 words, what gap/challenge/problem/need are you trying to address? Credible evidence of the problem)" fieldName="problemStatement" maxWords={WORD_LIMITS.problemStatement} placeholder="" />
+            <TextAreaField label="SOLUTION: What solution will address the mentioned problem/need. Does your solution contribute to the NDP IV in sectors critical to the economy? (In not more than 300 words, describe your solution to the stated problem/need)" fieldName="proposedSolution" maxWords={WORD_LIMITS.proposedSolution} placeholder="" />
+            <TextAreaField label="STRATEGY FOR RESULTS: What strategy do you intend to use to achieve the intended result? (In no more than 600 words, describe the methods/steps you will take to execute the project)" fieldName="strategyForResults" maxWords={WORD_LIMITS.strategyForResults} placeholder="" />
+            
+            <TextAreaField label="NOVELTY: How innovative is the proposed solution? Can it be realistically developed and deployed? (not exceeding 300 words)" fieldName="novelty" maxWords={WORD_LIMITS.novelty} placeholder="" />
+            <TextAreaField label="CAPACITY BUILDING: What skills and competencies shall be built as a result of implementing this project? (Not exceeding 500 words)" fieldName="capacityBuilding" maxWords={WORD_LIMITS.capacityBuilding} placeholder="" />
+            
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-1">Skill level * (Individual, Departmental, Faculty level, Community, Local government/regional, National level)</label>
+              <select
+                name="skillLevel"
+                value={formData.skillLevel}
+                onChange={handleInputChange}
+                className={`w-full p-2 border rounded ${errors.skillLevel ? 'border-red-500' : 'border-gray-300'}`}
+              >
+                <option value="">Select skill level</option>
+                {skillLevels.map(level => <option key={level.value} value={level.value}>{level.label}</option>)}
+              </select>
+            </div>
+
+            <TextAreaField label="SUSTAINABILITY: How will your project be sustained after the grant period? Will your dissemination include audiences (public sector, industry, social enterprises) critical for policy and program change to achieve impact at scale? (In not more than 600 words, describe how your project will be sustainable. Is it commercially viable? Is the execution realistic?)" fieldName="sustainability" maxWords={WORD_LIMITS.sustainability} placeholder="" />
+            <TextAreaField label="RISKS AND THEIR MITIGATION ETHICAL CONSIDERATIONS: What are the potential risks in this project and how shall they be mitigated? What steps shall you take to ensure that human participants are protected? what is your stakeholder engagement plan? (not exceeding 500 words)" fieldName="risksEthical" maxWords={WORD_LIMITS.risksEthical} placeholder="" />
+            <TextAreaField label="CONTRIBUTION TO UGANDA'S ECONOMY (In not more than 250 words, clearly explain the relevance of your project to the SDGs, and potential impact. Respond to specific sections of the National Development Plans (NDP IV), Sector plans, and regional visions such as the East African Community Vision 2050 and the Sustainable Development Goals. What tangible, measurable results from your project?)" fieldName="ugandaEconomyContribution" maxWords={WORD_LIMITS.ugandaEconomyContribution} placeholder="" />
+          </Card>
+
+          <Card title="Next Step">
+            <p className="text-sm text-muted">
+              After saving, upload all required documents (PDF or Word, max 10MB) on the documents page.
+              Your proposal submits automatically when all 9 attachment types are uploaded.
+            </p>
+          </Card>
+
+          {/* Action Buttons - MASSIVE */}
+          <div className="flex gap-4 justify-end">
+            <button
+              onClick={() => setShowPreview(false)}
+              className="flex items-center gap-2 px-8 py-4 bg-gray-500 hover:bg-gray-600 text-white font-bold text-lg rounded transition"
+            >
+              <ArrowLeft size={20} /> Back to Edit
+            </button>
+            <button
+              onClick={handleSubmitProposal}
+              disabled={submitting}
+              className="px-10 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded transition disabled:opacity-50"
+            >
+              {submitting ? 'Submitting...' : <><CheckCircle2 size={20} /> Confirm & Submit</>}
+            </button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // FORM MODE - Normal form entry
 
   return (
     <DashboardLayout role="applicant">
       <PageHeader
-        title={isEdit ? 'Edit Innovation Proposal' : 'Submit Innovation Proposal'}
-        subtitle={isEdit ? 'Update your proposal details' : 'Complete the application form for your innovation project'}
+        title={isEditMode ? 'Edit Innovation Proposal' : 'Create Innovation Proposal'}
+        subtitle="Complete all required fields marked with *"
       />
 
-      {error && <Alert variant="danger" title="Error">{error}</Alert>}
-      {success && (
-        <Alert variant="success" title="Success">
-          Draft saved successfully. You can now upload attachments and add project team members from the dashboard.
-        </Alert>
-      )}
+      {error && <Alert variant="danger">{error}</Alert>}
+      {success && <Alert variant="success">{success}</Alert>}
 
-      <form onSubmit={handleSaveDraft} className="space-y-6">
-        {/* Section A: Basic Project Information */}
-        <Card title="A. Basic Project Information">
-          <div className="space-y-4">
-            {renderInputField('projectTitle', 'Title of Innovation Project')}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInputField('piFirstName', 'PI First Name')}
-              {renderInputField('piLastName', 'PI Last Name')}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderSelectWithOther('piQualifications', 'Highest Qualifications', qualificationOptions, 'piQualificationsOther')}
-              {renderSelect('piSex', 'Sex of PI', sexOptions)}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderSelectWithOther('piDesignation', 'Designation of PI', designationOptions, 'piDesignationOther')}
-              {renderSelect('faculty', 'Faculty', faculties)}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderSelect('department', 'Department', departments)}
-              {renderSelect('innovationSpecialization', 'Innovation Specialization', specializations)}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInputField('piEmail', 'PI Email / Primary Contact Email', 'email')}
-              {renderInputField('piPhone', 'PI Telephone Number', 'tel')}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderSelectWithOther('typeOfInnovation', 'Type of Innovation', typeOfInnovationOptions, 'typeOfInnovationOther')}
-              {renderSelect('grantCall', 'Grant Call', grantCalls)}
-            </div>
+      <div className="grid grid-cols-1 gap-6">
+        {/* Grant Call Selection */}
+        <Card title="Grant Call">
+          <div>
+            <label className="block text-sm font-semibold mb-1">Grant Call *</label>
+            <select
+              name="grantCall"
+              value={formData.grantCall}
+              onChange={handleInputChange}
+              className={`w-full p-2 border rounded ${errors.grantCall ? 'border-red-500' : 'border-gray-300'}`}
+            >
+              <option value="">Select grant call</option>
+              {grantCalls.map((gc) => (
+                <option key={gc.value || gc.id} value={gc.value || String(gc.id)}>
+                  {gc.label || gc.title}
+                </option>
+              ))}
+            </select>
+            {errors.grantCall && <p className="text-red-600 text-sm mt-1">{errors.grantCall}</p>}
+            {formData.grantCall && (
+              <GrantCallDocumentsList
+                grantCall={findGrantCallById(grantCalls, formData.grantCall)}
+                title="Grant Call Documents"
+                className="mt-3"
+              />
+            )}
           </div>
         </Card>
 
-        {/* Section B: Innovation Description */}
-        <Card title="B. Innovation Description">
-          <div className="space-y-4">
-            {renderTextarea('innovationSummary', 'Innovation Summary (max 200 words)', 'Brief overview of the innovation', WORD_LIMITS.innovationSummary)}
-            {renderTextarea('problemStatement', 'Problem / Stakeholder Need (max 200 words)', 'What problem does this innovation solve?', WORD_LIMITS.problemStatement)}
-            {renderTextarea('proposedSolution', 'Proposed Innovation Solution (max 200 words)', 'How does your innovation solve the problem?', WORD_LIMITS.proposedSolution)}
-            {renderTextarea('uniqueness', 'Uniqueness / Innovativeness (max 200 words)', 'What makes this innovation unique?', WORD_LIMITS.uniqueness)}
-            {renderTextarea('targetUsers', 'Target Users / Beneficiaries (max 250 words)', 'Who will benefit from this innovation?', WORD_LIMITS.targetUsers)}
-            {renderTextarea('prototypeDescription', 'Prototype / Product / Service Description (max 300 words)', 'Describe the prototype, product, or service', WORD_LIMITS.prototypeDescription)}
-            {renderTextarea('implementationPlan', 'Implementation Plan (max 500 words)', 'Detailed plan for implementing the innovation', WORD_LIMITS.implementationPlan)}
-            {renderTextarea('marketPotential', 'Market / Adoption Potential (max 250 words)', 'Market opportunities and adoption strategy', WORD_LIMITS.marketPotential)}
-            {renderTextarea('scalability', 'Scalability (max 200 words)', 'How can the innovation be scaled?', WORD_LIMITS.scalability)}
-            {renderTextarea('sustainability', 'Sustainability (max 150 words)', 'Long-term sustainability of the innovation', WORD_LIMITS.sustainability)}
-            {renderTextarea('expectedOutputs', 'Expected Outputs and Impact (max 250 words)', 'Expected outcomes and impact', WORD_LIMITS.expectedOutputs)}
-            {renderTextarea('ethicalConsiderations', 'Ethical / Environmental Considerations (max 200 words)', '', WORD_LIMITS.ethicalConsiderations)}
-            {renderTextarea('capacityBuilding', 'Capacity Building (max 250 words)', '', WORD_LIMITS.capacityBuilding)}
-            {renderTextarea('conflictOfInterest', 'Conflict of Interest (max 150 words)', '', WORD_LIMITS.conflictOfInterest)}
-            {renderTextarea('references', 'References (max 250 words)', '', WORD_LIMITS.references)}
-            {renderInputField('totalBudget', 'Total Budget', 'number')}
+        {/* Innovation Content */}
+        <Card title="Innovation Proposal Content">
+          <TextAreaField label="SUMMARY OF YOUR PROJECT IDEA (In not more than 300 words, describe your idea)" fieldName="projectSummary" maxWords={WORD_LIMITS.projectSummary} placeholder="" />
+          <TextAreaField label="PROBLEM: What societal problems/needs are you addressing? (In not more than 200 words, what gap/challenge/problem/need are you trying to address? Credible evidence of the problem)" fieldName="problemStatement" maxWords={WORD_LIMITS.problemStatement} placeholder="" />
+          <TextAreaField label="SOLUTION: What solution will address the mentioned problem/need. Does your solution contribute to the NDP IV in sectors critical to the economy? (In not more than 300 words, describe your solution to the stated problem/need)" fieldName="proposedSolution" maxWords={WORD_LIMITS.proposedSolution} placeholder="" />
+          <TextAreaField label="STRATEGY FOR RESULTS: What strategy do you intend to use to achieve the intended result? (In no more than 600 words, describe the methods/steps you will take to execute the project)" fieldName="strategyForResults" maxWords={WORD_LIMITS.strategyForResults} placeholder="" />
+          
+          <TextAreaField label="NOVELTY: How innovative is the proposed solution? Can it be realistically developed and deployed? (not exceeding 300 words)" fieldName="novelty" maxWords={WORD_LIMITS.novelty} placeholder="" />
+          <TextAreaField label="CAPACITY BUILDING: What skills and competencies shall be built as a result of implementing this project? (Not exceeding 500 words)" fieldName="capacityBuilding" maxWords={WORD_LIMITS.capacityBuilding} placeholder="" />
+          <div className="mb-4">
+            <label className="block text-sm font-semibold mb-1">Skill level * (Individual, Departmental, Faculty level, Community, Local government/regional, National level)</label>
+            <select
+              name="skillLevel"
+              value={formData.skillLevel}
+              onChange={handleInputChange}
+              className={`w-full p-2 border rounded ${errors.skillLevel ? 'border-red-500' : 'border-gray-300'}`}
+            >
+              <option value="">Select skill level</option>
+              {skillLevels.map(level => <option key={level.value} value={level.value}>{level.label}</option>)}
+            </select>
+            {errors.skillLevel && <p className="text-red-600 text-sm mt-1">{errors.skillLevel}</p>}
           </div>
+
+          <TextAreaField label="SUSTAINABILITY: How will your project be sustained after the grant period? Will your dissemination include audiences (public sector, industry, social enterprises) critical for policy and program change to achieve impact at scale? (In not more than 600 words, describe how your project will be sustainable. Is it commercially viable? Is the execution realistic?)" fieldName="sustainability" maxWords={WORD_LIMITS.sustainability} placeholder="" />
+          <TextAreaField label="RISKS AND THEIR MITIGATION ETHICAL CONSIDERATIONS: What are the potential risks in this project and how shall they be mitigated? What steps shall you take to ensure that human participants are protected? what is your stakeholder engagement plan? (not exceeding 500 words)" fieldName="risksEthical" maxWords={WORD_LIMITS.risksEthical} placeholder="" />
+          <TextAreaField label="CONTRIBUTION TO UGANDA'S ECONOMY (In not more than 250 words, clearly explain the relevance of your project to the SDGs, and potential impact. Respond to specific sections of the National Development Plans (NDP IV), Sector plans, and regional visions such as the East African Community Vision 2050 and the Sustainable Development Goals. What tangible, measurable results from your project?)" fieldName="ugandaEconomyContribution" maxWords={WORD_LIMITS.ugandaEconomyContribution} placeholder="" />
         </Card>
 
-        {/* Section C: Compliance Confirmation */}
-        <Card title="C. Compliance Confirmation">
-          <div className="flex items-start gap-3">
+        <Card title="Supporting Documents">
+          <p className="text-sm text-muted mb-4">
+            Required files are uploaded on the documents page after saving this draft (PDF or Word, max 10MB each).
+          </p>
+          <FileInputField label="Budget File" fieldName="budgetFile" />
+          <FileInputField label="Concept Paper" fieldName="conceptPaperFile" />
+        </Card>
+
+        {/* Compliance */}
+        <Card title="Compliance">
+          <label className="flex items-center gap-2">
             <input
               type="checkbox"
               name="compliance"
               checked={formData.compliance}
               onChange={handleInputChange}
-              className={`mt-1 ${errors.compliance ? 'border-danger' : ''}`}
-              id="compliance"
+              className="w-4 h-4"
             />
-            <div className="flex-1">
-              <label htmlFor="compliance" className="text-sm text-textMain">
-                I confirm that the proposal being submitted complies with the KAB Research standard proposal format.
-                Submission of a proposal which does not comply with the said proposal format is an automatic
-                disqualification.
-              </label>
-              {errors.compliance && <span className="text-xs text-danger block mt-1">{errors.compliance}</span>}
-            </div>
-          </div>
+            <span className="text-sm">I confirm this proposal complies with KAB Research standard proposal format</span>
+          </label>
+          {errors.compliance && <p className="text-red-600 text-sm mt-1">{errors.compliance}</p>}
         </Card>
 
-        {/* Action Buttons */}
-        <Card>
-          <div className="space-y-4">
-            {hasAutosavedDraft && (
-              <div className="p-3 bg-warning bg-opacity-10 border border-warning rounded-md">
-                <p className="text-sm text-warning font-medium">
-                  💾 You have an autosaved draft. Your progress is being saved automatically as you type.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (autosaveManagerRef.current) {
-                      autosaveManagerRef.current.clear();
-                      setFormData(defaultFormData);
-                      setHasAutosavedDraft(false);
-                    }
-                  }}
-                  className="text-xs text-warning underline hover:no-underline mt-2"
-                >
-                  Clear saved draft
-                </button>
-              </div>
-            )}
-            
-            <div className="flex gap-4 justify-end">
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={loading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleSaveDraft(e);
-                }}
-              >
-                Save Draft
-              </Button>
-              <Button type="button" variant="primary" disabled={loading} onClick={handleSubmitProposal}>
-                {loading ? 'Processing...' : 'Submit Proposal'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </form>
+        {/* Action Buttons - MASSIVE */}
+        <div className="flex gap-4 justify-end">
+          <button
+            onClick={() => navigate('/applicant/proposals')}
+            className="px-8 py-4 bg-gray-500 hover:bg-gray-600 text-white font-bold text-lg rounded transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveDraft}
+            disabled={submitting}
+            className="flex items-center gap-2 px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg rounded transition disabled:opacity-50"
+          >
+            <Save size={20} /> Save Draft
+          </button>
+          <button
+            onClick={handleSubmitProposal}
+            disabled={submitting}
+            className="px-10 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded transition disabled:opacity-50"
+          >
+            {submitting ? 'Loading...' : <><Eye size={20} /> Preview & Submit</>}
+          </button>
+        </div>
+      </div>
     </DashboardLayout>
   );
 }
+

@@ -14,7 +14,7 @@ from app.schemas.schemas import (
     ProposalDetailResponse, ReviewerReportResponse,
     SubmitReviewRequest, MessageResponse
 )
-from app.utils.cloudinary import upload_file
+from app.utils.file_storage import upload_file, delete_file
 
 router = APIRouter(prefix="/reviewer", tags=["Reviewer"])
 

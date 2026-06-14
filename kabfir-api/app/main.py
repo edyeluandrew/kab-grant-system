@@ -5,6 +5,8 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.router import api_router
 import logging
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,6 +51,10 @@ Manages the full lifecycle of research and innovation grant applications at Kaba
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+
+Path("uploads").mkdir(exist_ok=True)
+app.mount("/files", StaticFiles(directory="uploads"), name="files")
 
 # CORS
 app.add_middleware(

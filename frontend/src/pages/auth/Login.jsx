@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { loginUser } from '../../api/authApi';
+import { loginUser, getMe } from '../../api/authApi';
+import { APPLICANT_ROLES } from '../../constants/roles';
 import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 
 export default function Login() {
   const { login, redirectPathForRole } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -27,39 +30,71 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const data = await loginUser(form);
-      login(data);
-      if (data.must_change_password) {
+      // POST /api/v1/auth/login → { access_token, refresh_token, token_type, user_id, role, must_change_password }
+      const loginData = await loginUser({ email: form.email, password: form.password });
+      console.log('✅ Login successful, data:', loginData);
+      
+      // Store token first so getMe() can use it in Authorization header
+      localStorage.setItem('authToken', loginData.access_token);
+      
+      // GET /api/v1/auth/me → { id, first_name, surname, other_name, gender, phone, email, role, faculty_id, department_id, is_active, created_at }
+      const userData = await getMe();
+      console.log('✅ User data fetched:', userData);
+      
+      // Merge both responses
+      const fullUserData = {
+        ...userData,
+        access_token: loginData.access_token,
+        refresh_token: loginData.refresh_token,
+        token_type: loginData.token_type,
+        must_change_password: loginData.must_change_password,
+      };
+      
+      console.log('✅ Full user data ready:', fullUserData);
+      console.log('📍 User role:', fullUserData.role);
+      
+      login(fullUserData);
+      
+      const redirectPath = redirectPathForRole(fullUserData.role);
+      console.log('📍 Redirect path for role', fullUserData.role, ':', redirectPath);
+      
+      if (loginData.must_change_password) {
+        console.log('⚠️ User must change password, redirecting to /change-password');
         navigate('/change-password', { replace: true });
+      } else if (redirectTo && APPLICANT_ROLES.includes(fullUserData.role)) {
+        navigate(redirectTo, { replace: true });
       } else {
-        navigate(redirectPathForRole(data.role), { replace: true });
+        console.log('✅ Navigating to:', redirectPath);
+        navigate(redirectPath, { replace: true });
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      console.error('❌ Login error:', err);
+      const detail = err.response?.data?.detail;
+      if (typeof detail === 'string') {
+        setError(detail);
+      } else if (Array.isArray(detail)) {
+        setError(detail.map((d) => d.msg).join(', '));
+      } else {
+        setError(err.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const fillCredentials = (email, password) => {
-    setForm({ email, password });
-    setError('');
-  };
-
   return (
     <div className="min-h-screen bg-background flex flex-col" style={{ backgroundColor: '#F4F4F4' }}>
-      {/* Header with Logo */}
+      {/* Header */}
       <div className="bg-surface border-b border-border shadow-sm" style={{ backgroundColor: '#FFFFFF' }}>
         <div className="max-w-md mx-auto px-6 py-6 flex items-center gap-3">
-          {!imageError && (
+          {!imageError ? (
             <img
               src="/log1.jpg"
               alt="KAB-FIR Logo"
               className="h-14 w-14 rounded-lg"
               onError={() => setImageError(true)}
             />
-          )}
-          {imageError && (
+          ) : (
             <div className="h-14 w-14 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
               K
             </div>
@@ -71,7 +106,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Login Form */}
+      {/* Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12" style={{ backgroundColor: '#F4F4F4' }}>
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
@@ -79,49 +114,11 @@ export default function Login() {
             <p className="text-sm mt-2" style={{ color: '#7A8793' }}>Sign in to your KAB-FIR account</p>
           </div>
 
-          {/* Demo credentials hint */}
-          <div className="mb-6 rounded-lg p-4 space-y-2" style={{ backgroundColor: '#E8F1F8', border: '1px solid #B8D4E8' }}>
-            <p className="font-semibold mb-2" style={{ color: '#0078B8', fontSize: '13px' }}>Demo Credentials — click to fill</p>
-
-            <button
-              type="button"
-              onClick={() => fillCredentials('admin@kab.ac.ug', 'admin1234')}
-              className="w-full text-left rounded px-3 py-2 transition hover:opacity-80"
-              style={{ backgroundColor: '#FFFFFF', border: '1px solid #B8D4E8' }}
-            >
-              <span style={{ color: '#4B5563', fontSize: '12px', fontWeight: '600' }}>Super Admin</span>
-              <span style={{ color: '#7A8793', fontSize: '11px', fontFamily: 'monospace', marginLeft: '8px' }}>
-                admin@kab.ac.ug / admin1234
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fillCredentials('sgo.admin@kab.ac.ug', 'sgo1234')}
-              className="w-full text-left rounded px-3 py-2 transition hover:opacity-80"
-              style={{ backgroundColor: '#FFFFFF', border: '1px solid #B8D4E8' }}
-            >
-              <span style={{ color: '#4B5563', fontSize: '12px', fontWeight: '600' }}>SGO Admin</span>
-              <span style={{ color: '#7A8793', fontSize: '11px', fontFamily: 'monospace', marginLeft: '8px' }}>
-                sgo.admin@kab.ac.ug / sgo1234
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fillCredentials('j.omondi@kab.ac.ug', 'staff1234')}
-              className="w-full text-left rounded px-3 py-2 transition hover:opacity-80"
-              style={{ backgroundColor: '#FFFFFF', border: '1px solid #B8D4E8' }}
-            >
-              <span style={{ color: '#4B5563', fontSize: '12px', fontWeight: '600' }}>Staff</span>
-              <span style={{ color: '#7A8793', fontSize: '11px', fontFamily: 'monospace', marginLeft: '8px' }}>
-                j.omondi@kab.ac.ug / staff1234
-              </span>
-            </button>
-          </div>
-
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: '#FFE8E8', border: '1px solid #FF8080', color: '#FF2B2B' }}>
+            <div
+              className="mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm"
+              style={{ backgroundColor: '#FFE8E8', border: '1px solid #FF8080', color: '#FF2B2B' }}
+            >
               <AlertCircle className="w-4 h-4 shrink-0" />
               {error}
             </div>
@@ -138,6 +135,7 @@ export default function Login() {
                 value={form.email}
                 onChange={handleChange}
                 placeholder="you@kab.ac.ug"
+                autoComplete="email"
                 className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                 style={{ backgroundColor: '#FFFFFF', borderColor: '#D9E2E7', color: '#4B5563' }}
               />
@@ -154,6 +152,7 @@ export default function Login() {
                   value={form.password}
                   onChange={handleChange}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
                   className="w-full px-4 py-2.5 pr-11 border rounded-lg text-sm focus:outline-none focus:ring-2 transition"
                   style={{ backgroundColor: '#FFFFFF', borderColor: '#D9E2E7', color: '#4B5563' }}
                 />
@@ -169,11 +168,7 @@ export default function Login() {
             </div>
 
             <div className="text-right">
-              <Link
-                to="/forgot-password"
-                className="text-xs font-medium hover:underline"
-                style={{ color: '#0078B8' }}
-              >
+              <Link to="/forgot-password" className="text-xs font-medium hover:underline" style={{ color: '#0078B8' }}>
                 Forgot password?
               </Link>
             </div>
@@ -196,7 +191,11 @@ export default function Login() {
           <div className="mt-6 text-center space-y-2">
             <p className="text-sm" style={{ color: '#7A8793' }}>
               Don't have an account?{' '}
-              <Link to="/register" className="font-medium hover:underline" style={{ color: '#0078B8' }}>
+              <Link
+                to={redirectTo ? `/register?redirect=${encodeURIComponent(redirectTo)}` : '/register'}
+                className="font-medium hover:underline"
+                style={{ color: '#0078B8' }}
+              >
                 Register here
               </Link>
             </p>
